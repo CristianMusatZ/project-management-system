@@ -24,9 +24,13 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
 }
 
 export function generateToken(payload: UserPayload): string {
+  const secret: jwt.Secret = JWT_SECRET;
+  const options: jwt.SignOptions = {
+    expiresIn: 86400, // 24 ore în secunde
+  };
   return jwt.sign(
-    { ...payload } as jwt.JwtPayload,
-    JWT_SECRET,
-    { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as string }
+    { id: payload.id, email: payload.email, role: payload.role, firstName: payload.firstName, lastName: payload.lastName },
+    secret,
+    options
   );
 }
