@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - date sensibile (utilizatori, autentificare, audit)
+  postgres:
+    image: postgres:16-alpine
+    container_name: pms-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pms_db}
+      POSTGRES_USER: ${POSTGRES_USER:-pms_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pms_secret_2024}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pms_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB - date flexibile (proiecte, sarcini, comentarii, rapoarte)
+  mongodb:
+    image: mongo:7
+    container_name: pms-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-pms_mongo}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-pms_mongo_2024}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-pms_projects}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API - Node.js + Express + TypeScript
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: pms-backend
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      # PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-pms_db}
+      POSTGRES_USER: ${POSTGRES_USER:-pms_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pms_secret_2024}
+      # MongoDB
+      MONGO_URI: mongodb://${MONGO_USER:-pms_mongo}:${MONGO_PASSWORD:-pms_mongo_2024}@mongodb:27017/${MONGO_DB:-pms_projects}?authSource=admin
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_change_in_production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend/src:/app/src
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    command: npm run dev
+
+  # Frontend - React + TypeScript
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: pms-frontend
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  mongo_data:
