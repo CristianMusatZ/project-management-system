@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { Users, Shield, ShieldCheck, ShieldAlert, Eye, UserCheck, UserX } from 'lucide-react';
+import { Users, UserCheck, UserX } from 'lucide-react';
 
 interface UserItem {
   id: number;
@@ -20,12 +20,6 @@ const roleColors: Record<string, string> = {
   viewer: 'bg-gray-100 text-gray-700',
 };
 
-const roleIcons: Record<string, any> = {
-  admin: ShieldAlert,
-  project_manager: ShieldCheck,
-  member: Shield,
-  viewer: Eye,
-};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserItem[]>([]);
