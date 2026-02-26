@@ -12,12 +12,6 @@ interface UserItem {
   created_at: string;
 }
 
-const roleLabels: Record<string, string> = {
-  admin: 'Administrator',
-  project_manager: 'Project Manager',
-  member: 'Membru echipă',
-  viewer: 'Vizualizator',
-};
 
 const roleColors: Record<string, string> = {
   admin: 'bg-purple-100 text-purple-700',
@@ -100,7 +94,7 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {users.map((u) => {
-                const RoleIcon = roleIcons[u.role] || Shield;
+                
                 return (
                   <tr key={u.id} className={`hover:bg-gray-50 transition ${!u.is_active ? 'opacity-50' : ''}`}>
                     <td className="px-5 py-4">

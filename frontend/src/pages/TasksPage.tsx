@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
+
 import { ListTodo, Calendar, Search, FolderKanban } from 'lucide-react';
 
 interface Task {
@@ -51,7 +51,7 @@ const priorityDots: Record<string, string> = {
 };
 
 export default function TasksPage() {
-  const { user } = useAuth();
+  
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
