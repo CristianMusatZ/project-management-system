@@ -3,12 +3,23 @@ import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
+import TasksPage from './pages/TasksPage';
+import ReportsPage from './pages/ReportsPage';
+import UsersPage from './pages/UsersPage';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <div className="flex items-center justify-center h-screen">Se încarcă...</div>;
   if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role !== 'admin') return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -24,10 +35,11 @@ export default function App() {
             <Layout>
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
-                <Route path="/projects" element={<div className="p-6"><h1 className="text-2xl font-bold">Proiecte</h1><p className="text-gray-500 mt-2">Pagina proiectelor — de implementat</p></div>} />
-                <Route path="/tasks" element={<div className="p-6"><h1 className="text-2xl font-bold">Sarcini</h1><p className="text-gray-500 mt-2">Pagina sarcinilor — de implementat</p></div>} />
-                <Route path="/reports" element={<div className="p-6"><h1 className="text-2xl font-bold">Rapoarte</h1><p className="text-gray-500 mt-2">Pagina rapoartelor — de implementat</p></div>} />
-                <Route path="/users" element={<div className="p-6"><h1 className="text-2xl font-bold">Utilizatori</h1><p className="text-gray-500 mt-2">Pagina utilizatorilor — de implementat</p></div>} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
               </Routes>
             </Layout>
           </ProtectedRoute>

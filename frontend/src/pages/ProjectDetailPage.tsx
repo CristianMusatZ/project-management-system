@@ -1,0 +1,490 @@
+import { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import {
+  ArrowLeft, Plus, X, AlertCircle, GripVertical,
+  Calendar, MessageSquare, Trash2, Pencil,
+} from 'lucide-react';
+
+interface Task {
+  _id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  assigneeId: number | null;
+  reporterId: number;
+  deadline: string | null;
+  comments: { _id: string; userId: number; text: string; createdAt: string }[];
+  createdAt: string;
+}
+
+interface Project {
+  _id: string;
+  name: string;
+  description: string;
+  status: string;
+  priority: string;
+  deadline: string;
+}
+
+const columns = [
+  { id: 'todo', label: 'De făcut', color: 'border-gray-300', bg: 'bg-gray-50', badge: 'bg-gray-200 text-gray-700' },
+  { id: 'in_progress', label: 'În lucru', color: 'border-blue-400', bg: 'bg-blue-50', badge: 'bg-blue-200 text-blue-700' },
+  { id: 'in_review', label: 'În review', color: 'border-yellow-400', bg: 'bg-yellow-50', badge: 'bg-yellow-200 text-yellow-700' },
+  { id: 'done', label: 'Finalizat', color: 'border-green-400', bg: 'bg-green-50', badge: 'bg-green-200 text-green-700' },
+];
+
+const priorityColors: Record<string, string> = {
+  low: 'border-l-slate-400',
+  medium: 'border-l-blue-400',
+  high: 'border-l-orange-400',
+  critical: 'border-l-red-500',
+};
+
+const priorityLabels: Record<string, string> = {
+  low: 'Scăzută',
+  medium: 'Medie',
+  high: 'Ridicată',
+  critical: 'Critică',
+};
+
+interface TaskFormData {
+  title: string;
+  description: string;
+  priority: string;
+  deadline: string;
+  status: string;
+}
+
+const emptyTaskForm: TaskFormData = {
+  title: '',
+  description: '',
+  priority: 'medium',
+  deadline: '',
+  status: 'todo',
+};
+
+export default function ProjectDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const [project, setProject] = useState<Project | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskForm, setTaskForm] = useState<TaskFormData>(emptyTaskForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [draggedTask, setDraggedTask] = useState<string | null>(null);
+  const [showCommentModal, setShowCommentModal] = useState<Task | null>(null);
+  const [commentText, setCommentText] = useState('');
+
+  const canManage = user?.role === 'admin' || user?.role === 'project_manager';
+  const canEditTasks = canManage || user?.role === 'member';
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [projRes, tasksRes] = await Promise.all([
+        api.get(`/projects/${id}`),
+        api.get(`/tasks/project/${id}`),
+      ]);
+      setProject(projRes.data.project);
+      setTasks(tasksRes.data.tasks || []);
+    } catch {
+      setError('Eroare la încărcarea datelor.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  function openCreateTask(status: string = 'todo') {
+    setEditingTask(null);
+    setTaskForm({ ...emptyTaskForm, status });
+    setError('');
+    setShowTaskModal(true);
+  }
+
+  function openEditTask(task: Task) {
+    setEditingTask(task);
+    setTaskForm({
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      deadline: task.deadline ? task.deadline.split('T')[0] : '',
+      status: task.status,
+    });
+    setError('');
+    setShowTaskModal(true);
+  }
+
+  async function handleTaskSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!taskForm.title) {
+      setError('Titlul este obligatoriu.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      if (editingTask) {
+        await api.put(`/tasks/${editingTask._id}`, taskForm);
+      } else {
+        await api.post('/tasks', { ...taskForm, projectId: id });
+      }
+      setShowTaskModal(false);
+      fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Eroare la salvare.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteTask(taskId: string) {
+    if (!window.confirm('Sigur doriți să ștergeți această sarcină?')) return;
+    try {
+      await api.delete(`/tasks/${taskId}`);
+      fetchData();
+    } catch {
+      alert('Eroare la ștergere.');
+    }
+  }
+
+  // Drag & Drop
+  function handleDragStart(taskId: string) {
+    setDraggedTask(taskId);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+  }
+
+  async function handleDrop(newStatus: string) {
+    if (!draggedTask) return;
+    const task = tasks.find((t) => t._id === draggedTask);
+    if (!task || task.status === newStatus) {
+      setDraggedTask(null);
+      return;
+    }
+
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((t) => (t._id === draggedTask ? { ...t, status: newStatus } : t))
+    );
+    setDraggedTask(null);
+
+    try {
+      await api.put(`/tasks/${task._id}`, { status: newStatus });
+    } catch {
+      fetchData(); // Revert on error
+    }
+  }
+
+  // Comments
+  async function handleAddComment() {
+    if (!commentText.trim() || !showCommentModal) return;
+    try {
+      await api.post(`/tasks/${showCommentModal._id}/comments`, { text: commentText });
+      setCommentText('');
+      setShowCommentModal(null);
+      fetchData();
+    } catch {
+      alert('Eroare la adăugarea comentariului.');
+    }
+  }
+
+  if (loading) return <div className="p-6 text-center text-gray-400">Se încarcă...</div>;
+  if (!project) return <div className="p-6 text-center text-red-500">Proiect negăsit.</div>;
+
+  return (
+    <div className="p-6 h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => navigate('/projects')} className="p-2 hover:bg-gray-100 rounded-lg transition">
+          <ArrowLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{project.description || 'Fără descriere'}</p>
+        </div>
+        {canManage && (
+          <button
+            onClick={() => openCreateTask()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            Sarcină nouă
+          </button>
+        )}
+      </div>
+
+      {/* Kanban Board */}
+      <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
+        {columns.map((col) => {
+          const colTasks = tasks.filter((t) => t.status === col.id);
+          return (
+            <div
+              key={col.id}
+              className={`flex-1 min-w-[280px] max-w-[350px] ${col.bg} rounded-xl p-3 flex flex-col`}
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(col.id)}
+            >
+              {/* Column header */}
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${col.badge.split(' ')[0]}`} />
+                  <h3 className="font-semibold text-sm text-gray-700">{col.label}</h3>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${col.badge}`}>
+                    {colTasks.length}
+                  </span>
+                </div>
+                {canManage && (
+                  <button
+                    onClick={() => openCreateTask(col.id)}
+                    className="p-1 hover:bg-white/60 rounded transition"
+                  >
+                    <Plus className="w-4 h-4 text-gray-400" />
+                  </button>
+                )}
+              </div>
+
+              {/* Tasks */}
+              <div className="flex-1 space-y-2 overflow-y-auto">
+                {colTasks.map((task) => (
+                  <div
+                    key={task._id}
+                    draggable={canEditTasks}
+                    onDragStart={() => handleDragStart(task._id)}
+                    className={`bg-white rounded-lg p-3 border border-gray-200 border-l-4 ${priorityColors[task.priority]} cursor-grab active:cursor-grabbing hover:shadow-sm transition group`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <GripVertical className="w-4 h-4 text-gray-300 mt-0.5 opacity-0 group-hover:opacity-100 transition flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
+                        {task.description && (
+                          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.description}</p>
+                        )}
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-xs text-gray-400">
+                            {priorityLabels[task.priority]}
+                          </span>
+                          {task.deadline && (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(task.deadline).toLocaleDateString('ro-RO')}
+                            </span>
+                          )}
+                          {task.comments.length > 0 && (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <MessageSquare className="w-3 h-3" />
+                              {task.comments.length}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Task actions */}
+                    <div className="flex gap-1 mt-2 pt-2 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition">
+                      {canEditTasks && (
+                        <button
+                          onClick={() => openEditTask(task)}
+                          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                          title="Editare"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setShowCommentModal(task); setCommentText(''); }}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                        title="Comentariu"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => handleDeleteTask(task._id)}
+                          className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
+                          title="Ștergere"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {colTasks.length === 0 && (
+                  <div className="text-center py-8 text-gray-400 text-xs">
+                    Trageți sarcini aici sau apăsați +
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Task Create/Edit Modal */}
+      {showTaskModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTaskModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingTask ? 'Editare sarcină' : 'Sarcină nouă'}
+              </h2>
+              <button onClick={() => setShowTaskModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
+              </div>
+            )}
+
+            <form onSubmit={handleTaskSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Titlu *</label>
+                <input
+                  type="text"
+                  value={taskForm.title}
+                  onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                  placeholder="Ex: Implementare login"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descriere</label>
+                <textarea
+                  value={taskForm.description}
+                  onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                  rows={3}
+                  placeholder="Detalii despre sarcină..."
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    value={taskForm.status}
+                    onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  >
+                    {columns.map((col) => (
+                      <option key={col.id} value={col.id}>{col.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prioritate</label>
+                  <select
+                    value={taskForm.priority}
+                    onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  >
+                    {Object.entries(priorityLabels).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
+                  <input
+                    type="date"
+                    value={taskForm.deadline}
+                    onChange={(e) => setTaskForm({ ...taskForm, deadline: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTaskModal(false)}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+                >
+                  Anulare
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition font-medium"
+                >
+                  {saving ? 'Se salvează...' : editingTask ? 'Salvare' : 'Creare'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Comment Modal */}
+      {showCommentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCommentModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Comentarii — {showCommentModal.title}</h2>
+              <button onClick={() => setShowCommentModal(null)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Existing comments */}
+            <div className="max-h-60 overflow-y-auto space-y-3 mb-4">
+              {showCommentModal.comments.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Niciun comentariu.</p>
+              ) : (
+                showCommentModal.comments.map((c) => (
+                  <div key={c._id} className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-sm text-gray-700">{c.text}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(c.createdAt).toLocaleString('ro-RO')}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Add comment */}
+            {canEditTasks && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Scrie un comentariu..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                />
+                <button
+                  onClick={handleAddComment}
+                  disabled={!commentText.trim()}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition text-sm font-medium"
+                >
+                  Trimite
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
