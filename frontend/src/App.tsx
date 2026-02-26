@@ -8,6 +8,7 @@ import ProjectDetailPage from './pages/ProjectDetailPage';
 import TasksPage from './pages/TasksPage';
 import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
+import ProfilePage from './pages/ProfilePage';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -22,6 +23,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (user?.role !== 'admin') return <Navigate to="/" replace />;
   return <>{children}</>;
 }
+
 
 export default function App() {
   return (
@@ -40,6 +42,7 @@ export default function App() {
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+                <Route path="/profile" element={<ProfilePage />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

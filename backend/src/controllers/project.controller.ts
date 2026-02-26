@@ -66,6 +66,16 @@ export async function getProjectById(req: AuthRequest, res: Response): Promise<v
       res.status(404).json({ error: 'Proiect negăsit.' });
       return;
     }
+
+    // Member și viewer pot vedea doar proiectele la care sunt alocați
+    if (req.user!.role === 'member' || req.user!.role === 'viewer') {
+      const isMember = project.memberIds.includes(req.user!.id);
+      if (!isMember) {
+        res.status(403).json({ error: 'Nu aveți acces la acest proiect.' });
+        return;
+      }
+    }
+
     res.json({ project });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la obținerea proiectului.' });
@@ -74,6 +84,18 @@ export async function getProjectById(req: AuthRequest, res: Response): Promise<v
 
 export async function updateProject(req: AuthRequest, res: Response): Promise<void> {
   try {
+    const existing = await Project.findById(req.params.id);
+    if (!existing) {
+      res.status(404).json({ error: 'Proiect negăsit.' });
+      return;
+    }
+
+    // PM poate edita doar proiectele proprii (unde este owner)
+    if (req.user!.role === 'project_manager' && existing.ownerId !== req.user!.id) {
+      res.status(403).json({ error: 'Nu aveți permisiunea de a edita acest proiect.' });
+      return;
+    }
+
     const project = await Project.findByIdAndUpdate(
       req.params.id,
       { ...req.body, updatedAt: new Date() },
@@ -100,6 +122,19 @@ export async function updateProject(req: AuthRequest, res: Response): Promise<vo
 
 export async function deleteProject(req: AuthRequest, res: Response): Promise<void> {
   try {
+    // PM poate șterge doar proiectele proprii (unde este owner)
+    if (req.user!.role === 'project_manager') {
+      const existing = await Project.findById(req.params.id);
+      if (!existing) {
+        res.status(404).json({ error: 'Proiect negăsit.' });
+        return;
+      }
+      if (existing.ownerId !== req.user!.id) {
+        res.status(403).json({ error: 'Nu aveți permisiunea de a șterge acest proiect.' });
+        return;
+      }
+    }
+
     const project = await Project.findByIdAndDelete(req.params.id);
     if (!project) {
       res.status(404).json({ error: 'Proiect negăsit.' });
@@ -116,5 +151,63 @@ export async function deleteProject(req: AuthRequest, res: Response): Promise<vo
     res.json({ message: 'Proiect șters cu succes.' });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la ștergerea proiectului.' });
+  }
+}
+
+export async function addMember(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      res.status(400).json({ error: 'userId este obligatoriu.' });
+      return;
+    }
+
+    const project = await Project.findById(id);
+    if (!project) {
+      res.status(404).json({ error: 'Proiect negăsit.' });
+      return;
+    }
+
+    if (req.user!.role === 'project_manager' && project.ownerId !== req.user!.id) {
+      res.status(403).json({ error: 'Nu aveți permisiunea de a modifica acest proiect.' });
+      return;
+    }
+
+    const numUserId = Number(userId);
+    if (!project.memberIds.includes(numUserId)) {
+      project.memberIds.push(numUserId);
+      await project.save();
+    }
+
+    res.json({ message: 'Membru adăugat.', project });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare la adăugarea membrului.' });
+  }
+}
+
+export async function removeMember(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id, userId } = req.params;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      res.status(404).json({ error: 'Proiect negăsit.' });
+      return;
+    }
+
+    if (req.user!.role === 'project_manager' && project.ownerId !== req.user!.id) {
+      res.status(403).json({ error: 'Nu aveți permisiunea de a modifica acest proiect.' });
+      return;
+    }
+
+    const numUserId = Number(userId);
+    project.memberIds = project.memberIds.filter((mid: number) => mid !== numUserId);
+    await project.save();
+
+    res.json({ message: 'Membru eliminat.', project });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare la eliminarea membrului.' });
   }
 }

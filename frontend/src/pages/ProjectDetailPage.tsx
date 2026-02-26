@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft, Plus, X, AlertCircle, GripVertical,
-  Calendar, MessageSquare, Trash2, Pencil,
+  Calendar, MessageSquare, Trash2, Pencil, Users, UserPlus, UserMinus,
 } from 'lucide-react';
 
 interface Task {
@@ -27,6 +27,15 @@ interface Project {
   status: string;
   priority: string;
   deadline: string;
+  memberIds: number[];
+}
+
+interface UserInfo {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: string;
 }
 
 const columns = [
@@ -56,6 +65,7 @@ interface TaskFormData {
   priority: string;
   deadline: string;
   status: string;
+  assigneeId: string;
 }
 
 const emptyTaskForm: TaskFormData = {
@@ -64,6 +74,7 @@ const emptyTaskForm: TaskFormData = {
   priority: 'medium',
   deadline: '',
   status: 'todo',
+  assigneeId: '',
 };
 
 export default function ProjectDetailPage() {
@@ -73,6 +84,7 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -82,9 +94,15 @@ export default function ProjectDetailPage() {
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
   const [showCommentModal, setShowCommentModal] = useState<Task | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [addMemberId, setAddMemberId] = useState('');
+  const [membersError, setMembersError] = useState('');
 
   const canManage = user?.role === 'admin' || user?.role === 'project_manager';
   const canEditTasks = canManage || user?.role === 'member';
+  // Member poate drag doar sarcinile asignate lui; admin/PM pot drag orice
+  const canDragTask = (task: Task) =>
+    canManage || (user?.role === 'member' && task.assigneeId === user?.id);
 
   const fetchData = useCallback(async () => {
     try {
@@ -106,6 +124,15 @@ export default function ProjectDetailPage() {
     fetchData();
   }, [fetchData]);
 
+  // Fetch users list for admin/PM (for assignee dropdown and member management)
+  useEffect(() => {
+    if (canManage) {
+      api.get('/users/list')
+        .then((res) => setUsers(res.data.users || []))
+        .catch(() => {});
+    }
+  }, [canManage]);
+
   function openCreateTask(status: string = 'todo') {
     setEditingTask(null);
     setTaskForm({ ...emptyTaskForm, status });
@@ -121,6 +148,7 @@ export default function ProjectDetailPage() {
       priority: task.priority,
       deadline: task.deadline ? task.deadline.split('T')[0] : '',
       status: task.status,
+      assigneeId: task.assigneeId != null ? String(task.assigneeId) : '',
     });
     setError('');
     setShowTaskModal(true);
@@ -135,10 +163,14 @@ export default function ProjectDetailPage() {
     setSaving(true);
     setError('');
     try {
+      const payload = {
+        ...taskForm,
+        assigneeId: taskForm.assigneeId ? Number(taskForm.assigneeId) : null,
+      };
       if (editingTask) {
-        await api.put(`/tasks/${editingTask._id}`, taskForm);
+        await api.put(`/tasks/${editingTask._id}`, payload);
       } else {
-        await api.post('/tasks', { ...taskForm, projectId: id });
+        await api.post('/tasks', { ...payload, projectId: id });
       }
       setShowTaskModal(false);
       fetchData();
@@ -202,8 +234,40 @@ export default function ProjectDetailPage() {
     }
   }
 
+  // Member management
+  async function handleAddMember() {
+    if (!addMemberId) return;
+    setMembersError('');
+    try {
+      const res = await api.post(`/projects/${id}/members`, { userId: Number(addMemberId) });
+      setProject(res.data.project);
+      setAddMemberId('');
+    } catch (err: any) {
+      setMembersError(err.response?.data?.error || 'Eroare la adăugarea membrului.');
+    }
+  }
+
+  async function handleRemoveMember(userId: number) {
+    setMembersError('');
+    try {
+      const res = await api.delete(`/projects/${id}/members/${userId}`);
+      setProject(res.data.project);
+    } catch (err: any) {
+      setMembersError(err.response?.data?.error || 'Eroare la eliminarea membrului.');
+    }
+  }
+
+  function getUserName(userId: number | null) {
+    if (!userId) return '—';
+    const u = users.find((u) => u.id === userId);
+    return u ? `${u.first_name} ${u.last_name}` : `#${userId}`;
+  }
+
   if (loading) return <div className="p-6 text-center text-gray-400">Se încarcă...</div>;
   if (!project) return <div className="p-6 text-center text-red-500">Proiect negăsit.</div>;
+
+  const nonMembers = users.filter((u) => !project.memberIds.includes(u.id));
+  const memberUsers = users.filter((u) => project.memberIds.includes(u.id));
 
   return (
     <div className="p-6 h-full flex flex-col">
@@ -216,15 +280,26 @@ export default function ProjectDetailPage() {
           <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{project.description || 'Fără descriere'}</p>
         </div>
-        {canManage && (
-          <button
-            onClick={() => openCreateTask()}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium"
-          >
-            <Plus className="w-5 h-5" />
-            Sarcină nouă
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              onClick={() => { setShowMembersModal(true); setMembersError(''); setAddMemberId(''); }}
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+            >
+              <Users className="w-4 h-4" />
+              Membri ({project.memberIds.length})
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => openCreateTask()}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium"
+            >
+              <Plus className="w-5 h-5" />
+              Sarcină nouă
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Kanban Board */}
@@ -262,9 +337,9 @@ export default function ProjectDetailPage() {
                 {colTasks.map((task) => (
                   <div
                     key={task._id}
-                    draggable={canEditTasks}
-                    onDragStart={() => handleDragStart(task._id)}
-                    className={`bg-white rounded-lg p-3 border border-gray-200 border-l-4 ${priorityColors[task.priority]} cursor-grab active:cursor-grabbing hover:shadow-sm transition group`}
+                    draggable={canDragTask(task)}
+                    onDragStart={() => canDragTask(task) && handleDragStart(task._id)}
+                    className={`bg-white rounded-lg p-3 border border-gray-200 border-l-4 ${priorityColors[task.priority]} ${canDragTask(task) ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} hover:shadow-sm transition group`}
                   >
                     <div className="flex items-start gap-2">
                       <GripVertical className="w-4 h-4 text-gray-300 mt-0.5 opacity-0 group-hover:opacity-100 transition flex-shrink-0" />
@@ -273,10 +348,15 @@ export default function ProjectDetailPage() {
                         {task.description && (
                           <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.description}</p>
                         )}
-                        <div className="flex items-center gap-3 mt-2">
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
                           <span className="text-xs text-gray-400">
                             {priorityLabels[task.priority]}
                           </span>
+                          {task.assigneeId && canManage && (
+                            <span className="text-xs text-blue-600 font-medium">
+                              {getUserName(task.assigneeId)}
+                            </span>
+                          )}
                           {task.deadline && (
                             <span className="text-xs text-gray-400 flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -378,7 +458,7 @@ export default function ProjectDetailPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                   <select
@@ -401,6 +481,26 @@ export default function ProjectDetailPage() {
                     {Object.entries(priorityLabels).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
                     ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Asignat la</label>
+                  <select
+                    value={taskForm.assigneeId}
+                    onChange={(e) => setTaskForm({ ...taskForm, assigneeId: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  >
+                    <option value="">— Neasignat —</option>
+                    {users
+                      .filter((u) => project?.memberIds.includes(u.id))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.first_name} {u.last_name}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div>
@@ -482,6 +582,78 @@ export default function ProjectDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Members Management Modal */}
+      {showMembersModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowMembersModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-bold text-gray-900">Membri proiect</h2>
+              <button onClick={() => setShowMembersModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {membersError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {membersError}
+              </div>
+            )}
+
+            {/* Add member */}
+            {nonMembers.length > 0 && (
+              <div className="flex gap-2 mb-5">
+                <select
+                  value={addMemberId}
+                  onChange={(e) => setAddMemberId(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Selectează utilizator...</option>
+                  {nonMembers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.first_name} {u.last_name} ({u.role})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAddMember}
+                  disabled={!addMemberId}
+                  className="flex items-center gap-1 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition text-sm font-medium"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Adaugă
+                </button>
+              </div>
+            )}
+
+            {/* Current members list */}
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {memberUsers.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Niciun membru alocat.</p>
+              ) : (
+                memberUsers.map((u) => (
+                  <div key={u.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {u.first_name[0]}{u.last_name[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{u.first_name} {u.last_name}</p>
+                      <p className="text-xs text-gray-500">{u.role}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveMember(u.id)}
+                      className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition"
+                      title="Elimină"
+                    >
+                      <UserMinus className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

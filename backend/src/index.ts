@@ -23,13 +23,22 @@ app.use(cors({
   credentials: true,
 }));
 
-// Rate limiting - protecție împotriva brute-force
-const limiter = rateLimit({
+// Rate limiting strict pe autentificare (protecție brute-force)
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minute
-  max: 100, // max 100 request-uri per IP
+  max: 20, // max 20 încercări de login per IP
+  message: { error: 'Prea multe încercări de autentificare. Încercați din nou mai târziu.' },
+});
+
+// Rate limiting general pe restul API-ului (protecție de bază)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minute
+  max: 500, // max 500 request-uri per IP pentru navigare normală
   message: { error: 'Prea multe request-uri. Încercați din nou mai târziu.' },
 });
-app.use('/api/', limiter);
+
+app.use('/api/auth', authLimiter);
+app.use('/api/', apiLimiter);
 
 // ============================
 // General Middleware

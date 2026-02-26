@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import Task from '../models/Task';
+import Project from '../models/Project';
 import { AuthRequest } from '../types';
 
 export async function createTask(req: AuthRequest, res: Response): Promise<void> {
@@ -25,6 +26,24 @@ export async function createTask(req: AuthRequest, res: Response): Promise<void>
     res.status(201).json({ message: 'Sarcină creată cu succes.', task });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la crearea sarcinii.' });
+  }
+}
+
+// Returnează toate sarcinile pentru toate proiectele accesibile userului (un singur request)
+export async function getAllTasks(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const projectFilter: any = {};
+    if (req.user!.role === 'member' || req.user!.role === 'viewer') {
+      projectFilter.memberIds = req.user!.id;
+    }
+
+    const projects = await Project.find(projectFilter).select('_id');
+    const projectIds = projects.map((p) => p._id);
+
+    const tasks = await Task.find({ projectId: { $in: projectIds } }).sort({ createdAt: -1 });
+    res.json({ tasks });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare la obținerea sarcinilor.' });
   }
 }
 
@@ -59,6 +78,18 @@ export async function getTaskById(req: AuthRequest, res: Response): Promise<void
 
 export async function updateTask(req: AuthRequest, res: Response): Promise<void> {
   try {
+    const existing = await Task.findById(req.params.id);
+    if (!existing) {
+      res.status(404).json({ error: 'Sarcină negăsită.' });
+      return;
+    }
+
+    // Member poate actualiza doar sarcinile la care este asignat
+    if (req.user!.role === 'member' && existing.assigneeId !== req.user!.id) {
+      res.status(403).json({ error: 'Nu aveți permisiunea de a modifica această sarcină.' });
+      return;
+    }
+
     const task = await Task.findByIdAndUpdate(
       req.params.id,
       { ...req.body, updatedAt: new Date() },

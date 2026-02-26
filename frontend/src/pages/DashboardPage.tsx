@@ -31,18 +31,12 @@ export default function DashboardPage() {
     async function fetchStats() {
       try {
         setLoading(true);
-        const projectsRes = await api.get('/projects');
-        const projs: Project[] = projectsRes.data.projects || [];
-        setProjects(projs);
-
-        const allTasks: Task[] = [];
-        for (const proj of projs) {
-          try {
-            const taskRes = await api.get(`/tasks/project/${proj._id}`);
-            allTasks.push(...(taskRes.data.tasks || []));
-          } catch { /* skip */ }
-        }
-        setTasks(allTasks);
+        const [projectsRes, tasksRes] = await Promise.all([
+          api.get('/projects'),
+          api.get('/tasks/all'),
+        ]);
+        setProjects(projectsRes.data.projects || []);
+        setTasks(tasksRes.data.tasks || []);
       } catch { /* error */ } finally {
         setLoading(false);
       }

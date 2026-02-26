@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FolderKanban, ListTodo, BarChart3, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, ListTodo, BarChart3, Users, LogOut, UserCircle } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -54,18 +54,22 @@ export default function Layout({ children }: { children: ReactNode }) {
         {/* User info + Logout */}
         <div className="px-4 py-4 border-t border-gray-200">
           <div className="flex items-center">
-            <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
-            </div>
-            <div className="ml-3 flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.firstName} {user?.lastName}
-              </p>
-              <p className="text-xs text-gray-500 truncate">{user?.role}</p>
-            </div>
+            <Link to="/profile" className="flex items-center gap-3 flex-1 min-w-0 group">
+              <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold flex-shrink-0 group-hover:bg-primary-200 transition-colors">
+                {user?.firstName?.[0]}{user?.lastName?.[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-primary-700 transition-colors">
+                  {user?.firstName} {user?.lastName}
+                </p>
+                <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                  <UserCircle className="w-3 h-3" /> {user?.role}
+                </p>
+              </div>
+            </Link>
             <button
               onClick={logout}
-              className="text-gray-400 hover:text-red-500 transition-colors"
+              className="text-gray-400 hover:text-red-500 transition-colors ml-2"
               title="Deconectare"
             >
               <LogOut className="w-5 h-5" />

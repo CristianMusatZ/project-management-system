@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { Users, UserCheck, UserX } from 'lucide-react';
+import { Users, UserCheck, UserX, UserPlus, X, AlertCircle } from 'lucide-react';
 
 interface UserItem {
   id: number;
@@ -12,6 +12,21 @@ interface UserItem {
   created_at: string;
 }
 
+interface CreateUserForm {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}
+
+const emptyForm: CreateUserForm = {
+  email: '',
+  password: '',
+  firstName: '',
+  lastName: '',
+  role: 'member',
+};
 
 const roleColors: Record<string, string> = {
   admin: 'bg-purple-100 text-purple-700',
@@ -20,10 +35,13 @@ const roleColors: Record<string, string> = {
   viewer: 'bg-gray-100 text-gray-700',
 };
 
-
 export default function UsersPage() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateUserForm>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     fetchUsers();
@@ -59,11 +77,44 @@ export default function UsersPage() {
     }
   }
 
+  async function handleCreateUser(e: React.FormEvent) {
+    e.preventDefault();
+    if (!createForm.email || !createForm.password || !createForm.firstName || !createForm.lastName) {
+      setCreateError('Toate câmpurile sunt obligatorii.');
+      return;
+    }
+    if (createForm.password.length < 8) {
+      setCreateError('Parola trebuie să aibă cel puțin 8 caractere.');
+      return;
+    }
+    setSaving(true);
+    setCreateError('');
+    try {
+      await api.post('/users', createForm);
+      setShowCreateModal(false);
+      setCreateForm(emptyForm);
+      fetchUsers();
+    } catch (err: any) {
+      setCreateError(err.response?.data?.error || 'Eroare la crearea utilizatorului.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Utilizatori</h1>
-        <p className="text-gray-500 mt-1">{users.length} utilizatori înregistrați</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Utilizatori</h1>
+          <p className="text-gray-500 mt-1">{users.length} utilizatori înregistrați</p>
+        </div>
+        <button
+          onClick={() => { setShowCreateModal(true); setCreateForm(emptyForm); setCreateError(''); }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium"
+        >
+          <UserPlus className="w-4 h-4" />
+          Utilizator nou
+        </button>
       </div>
 
       {loading ? (
@@ -88,7 +139,6 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {users.map((u) => {
-                
                 return (
                   <tr key={u.id} className={`hover:bg-gray-50 transition ${!u.is_active ? 'opacity-50' : ''}`}>
                     <td className="px-5 py-4">
@@ -134,6 +184,108 @@ export default function UsersPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-bold text-gray-900">Utilizator nou</h2>
+              <button onClick={() => setShowCreateModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {createError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {createError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prenume *</label>
+                  <input
+                    type="text"
+                    value={createForm.firstName}
+                    onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                    placeholder="Ion"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nume *</label>
+                  <input
+                    type="text"
+                    value={createForm.lastName}
+                    onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                    placeholder="Popescu"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  placeholder="ion.popescu@exemplu.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Parolă * (min. 8 caractere)</label>
+                <input
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
+                <select
+                  value={createForm.role}
+                  onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                >
+                  <option value="admin">Administrator</option>
+                  <option value="project_manager">Project Manager</option>
+                  <option value="member">Membru echipă</option>
+                  <option value="viewer">Vizualizator</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+                >
+                  Anulare
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition font-medium"
+                >
+                  {saving ? 'Se creează...' : 'Creare cont'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

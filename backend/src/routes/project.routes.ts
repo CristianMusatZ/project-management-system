@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createProject, getProjects, getProjectById, updateProject, deleteProject } from '../controllers/project.controller';
+import { createProject, getProjects, getProjectById, updateProject, deleteProject, addMember, removeMember } from '../controllers/project.controller';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 
@@ -12,5 +12,7 @@ router.get('/:id', getProjectById);
 router.post('/', authorize('admin', 'project_manager'), createProject);
 router.put('/:id', authorize('admin', 'project_manager'), updateProject);
 router.delete('/:id', authorize('admin', 'project_manager'), deleteProject);
+router.post('/:id/members', authorize('admin', 'project_manager'), addMember);
+router.delete('/:id/members/:userId', authorize('admin', 'project_manager'), removeMember);
 
 export default router;

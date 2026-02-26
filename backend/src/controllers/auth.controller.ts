@@ -145,3 +145,59 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: 'Eroare la obținerea profilului.' });
   }
 }
+
+export async function updateProfile(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as any;
+    const userId = authReq.user?.id;
+    const { firstName, lastName } = req.body;
+
+    if (!firstName || !lastName) {
+      res.status(400).json({ error: 'Prenumele și numele sunt obligatorii.' });
+      return;
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET first_name = $1, last_name = $2, updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, email, first_name, last_name, role`,
+      [firstName, lastName, userId]
+    );
+
+    res.json({ message: 'Profil actualizat.', user: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare la actualizarea profilului.' });
+  }
+}
+
+export async function changePassword(req: Request, res: Response): Promise<void> {
+  try {
+    const authReq = req as any;
+    const userId = authReq.user?.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: 'Parola curentă și cea nouă sunt obligatorii.' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: 'Parola nouă trebuie să aibă cel puțin 8 caractere.' });
+      return;
+    }
+
+    const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+    const isValid = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!isValid) {
+      res.status(401).json({ error: 'Parola curentă este incorectă.' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    const newHash = await bcrypt.hash(newPassword, salt);
+    await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
+
+    res.json({ message: 'Parola a fost schimbată cu succes.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare la schimbarea parolei.' });
+  }
+}
