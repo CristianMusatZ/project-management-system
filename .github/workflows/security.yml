@@ -18,8 +18,7 @@ jobs:
   snyk-monitor:
     name: Snyk Monitor
     runs-on: ubuntu-latest
-    # Skip dacă SNYK_TOKEN nu e configurat
-    if: ${{ secrets.SNYK_TOKEN != '' }}
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -38,12 +37,19 @@ jobs:
         run: npm install -g snyk
 
       - name: Snyk Monitor — backend
-        run: cd backend && snyk monitor --project-name=pms-backend
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "⚠️  SNYK_TOKEN not configured — skipping Snyk monitor."
+            exit 0
+          fi
+          cd backend && snyk monitor --project-name=pms-backend
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: Snyk Monitor — frontend
-        run: cd frontend && snyk monitor --project-name=pms-frontend
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then exit 0; fi
+          cd frontend && snyk monitor --project-name=pms-frontend
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
