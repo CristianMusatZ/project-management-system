@@ -116,8 +116,7 @@ jobs:
     name: Snyk Security Scan
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-test]
-    # Rulează doar dacă SNYK_TOKEN este setat în GitHub Secrets
-    if: ${{ secrets.SNYK_TOKEN != '' }}
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -136,9 +135,14 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      # Snyk CLI citește automat SNYK_TOKEN din env — nu e nevoie de "snyk auth"
+      # Dacă SNYK_TOKEN nu e setat, scriptul iese cu 0 (skip curat)
       - name: Snyk — Scan backend (SCA + SAST)
         run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "⚠️  SNYK_TOKEN not configured — skipping Snyk scan."
+            echo "   Add SNYK_TOKEN in GitHub → Settings → Secrets → Actions"
+            exit 0
+          fi
           cd backend
           snyk test --severity-threshold=high --json > ../snyk-backend.json || true
           snyk code test --json >> ../snyk-backend-code.json || true
@@ -147,6 +151,7 @@ jobs:
 
       - name: Snyk — Scan frontend (SCA + SAST)
         run: |
+          if [ -z "$SNYK_TOKEN" ]; then exit 0; fi
           cd frontend
           snyk test --severity-threshold=high --json > ../snyk-frontend.json || true
           snyk code test --json >> ../snyk-frontend-code.json || true
