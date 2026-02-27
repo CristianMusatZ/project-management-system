@@ -9,6 +9,7 @@ export interface IProject extends Document {
   deadline: Date;
   ownerId: number;       // referință la user din PostgreSQL
   memberIds: number[];   // referințe la useri din PostgreSQL
+  labelIds: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +32,7 @@ const ProjectSchema = new Schema<IProject>(
     deadline: { type: Date, required: true },
     ownerId: { type: Number, required: true },
     memberIds: [{ type: Number }],
+    labelIds: [{ type: Schema.Types.ObjectId, ref: 'Label' }],
   },
   {
     timestamps: true,

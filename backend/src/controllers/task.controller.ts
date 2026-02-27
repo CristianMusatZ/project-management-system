@@ -1,8 +1,15 @@
 import { Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import Task from '../models/Task';
 import Project from '../models/Project';
 import { AuthRequest } from '../types';
 import { createNotification } from './notification.controller';
+
+const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 const statusLabels: Record<string, string> = {
   todo: 'De făcut',
@@ -40,7 +47,8 @@ export async function createTask(req: AuthRequest, res: Response): Promise<void>
         'Sarcină nouă asignată',
         `Ai fost asignat la sarcina: "${title}"`,
         'task',
-        task._id.toString()
+        task._id.toString(),
+        { taskTitle: title }
       );
     }
 
@@ -135,7 +143,8 @@ export async function updateTask(req: AuthRequest, res: Response): Promise<void>
         'Sarcină asignată',
         `Ai fost asignat la sarcina: "${existing.title}"`,
         'task',
-        task._id.toString()
+        task._id.toString(),
+        { taskTitle: existing.title }
       );
     }
 
@@ -152,7 +161,8 @@ export async function updateTask(req: AuthRequest, res: Response): Promise<void>
           'Status sarcină actualizat',
           `Sarcina "${existing.title}" a fost mutată în: ${label}`,
           'task',
-          task._id.toString()
+          task._id.toString(),
+          { taskTitle: existing.title, newStatus }
         );
       }
     }
@@ -210,6 +220,7 @@ export async function addComment(req: AuthRequest, res: Response): Promise<void>
     const notify = new Set<number>();
     if (existingTask.reporterId && existingTask.reporterId !== req.user!.id) notify.add(existingTask.reporterId);
     if (existingTask.assigneeId && existingTask.assigneeId !== req.user!.id) notify.add(existingTask.assigneeId);
+    const commentPreview = text.length > 120 ? text.slice(0, 117) + '...' : text;
     for (const uid of notify) {
       await createNotification(
         uid,
@@ -217,12 +228,99 @@ export async function addComment(req: AuthRequest, res: Response): Promise<void>
         'Comentariu nou',
         `Comentariu nou pe sarcina: "${existingTask.title}"`,
         'task',
-        task._id.toString()
+        task._id.toString(),
+        {
+          taskTitle: existingTask.title,
+          authorName: `${req.user!.firstName} ${req.user!.lastName}`.trim() || req.user!.email,
+          commentPreview,
+        }
       );
     }
 
     res.json({ message: 'Comentariu adăugat.', task });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la adăugarea comentariului.' });
+  }
+}
+
+export async function uploadAttachment(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { filename, data, mimeType } = req.body;
+
+    if (!filename || !data) {
+      res.status(400).json({ error: 'Numele fișierului și datele sunt obligatorii.' });
+      return;
+    }
+
+    const task = await Task.findById(id);
+    if (!task) {
+      res.status(404).json({ error: 'Sarcina nu a fost găsită.' });
+      return;
+    }
+
+    // Verificare permisiune — viewer nu poate adăuga atașamente
+    if (req.user!.role === 'viewer') {
+      res.status(403).json({ error: 'Nu aveți permisiunea de a adăuga atașamente.' });
+      return;
+    }
+
+    // Sanitizare și unicizare nume fișier
+    const ext = path.extname(filename);
+    const baseName = path.basename(filename, ext).replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 100);
+    const uniqueName = `${Date.now()}_${baseName}${ext}`;
+    const filePath = path.join(UPLOADS_DIR, uniqueName);
+
+    // Scriere pe disc din base64
+    const buffer = Buffer.from(data, 'base64');
+    fs.writeFileSync(filePath, buffer);
+
+    // Actualizare task
+    task.attachments.push(uniqueName);
+    await task.save();
+
+    res.json({ message: 'Atașament adăugat.', filename: uniqueName, attachments: task.attachments });
+  } catch (error) {
+    console.error('Upload attachment error:', error);
+    res.status(500).json({ error: 'Eroare la încărcarea atașamentului.' });
+  }
+}
+
+export async function deleteAttachment(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+    const filename = String(req.params.filename);
+
+    const task = await Task.findById(id);
+    if (!task) {
+      res.status(404).json({ error: 'Sarcina nu a fost găsită.' });
+      return;
+    }
+
+    // Verificare permisiune
+    if (req.user!.role === 'viewer') {
+      res.status(403).json({ error: 'Nu aveți permisiunea de a șterge atașamente.' });
+      return;
+    }
+
+    if (!task.attachments.includes(filename)) {
+      res.status(404).json({ error: 'Atașamentul nu a fost găsit.' });
+      return;
+    }
+
+    // Ștergere din task
+    task.attachments = task.attachments.filter((a) => a !== filename);
+    await task.save();
+
+    // Ștergere fișier de pe disc
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ message: 'Atașament șters.', attachments: task.attachments });
+  } catch (error) {
+    console.error('Delete attachment error:', error);
+    res.status(500).json({ error: 'Eroare la ștergerea atașamentului.' });
   }
 }

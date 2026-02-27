@@ -1,0 +1,115 @@
+name: Scheduled Security Scan
+
+# Rulează automat în fiecare luni la 07:00 UTC
+# și poate fi declanșat manual din GitHub → Actions
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ════════════════════════════════════════════════════
+  # Snyk Monitor — urmărire continuă a dependențelor
+  # Rapoartele apar în dashboard-ul snyk.io
+  # ════════════════════════════════════════════════════
+  snyk-monitor:
+    name: Snyk Monitor
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk Monitor — backend
+        run: cd backend && snyk monitor --project-name=pms-backend
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk Monitor — frontend
+        run: cd frontend && snyk monitor --project-name=pms-frontend
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  # ════════════════════════════════════════════════════
+  # npm audit complet (toate severitățile)
+  # ════════════════════════════════════════════════════
+  full-audit:
+    name: Full npm Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Full audit — backend
+        run: cd backend && npm audit --json > ../audit-backend.json || true
+
+      - name: Full audit — frontend
+        run: cd frontend && npm audit --json > ../audit-frontend.json || true
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-reports-${{ github.run_number }}
+          path: |
+            audit-backend.json
+            audit-frontend.json
+          retention-days: 90
+
+  # ════════════════════════════════════════════════════
+  # CodeQL programat (separat de CI pentru analiză aprofundată)
+  # ════════════════════════════════════════════════════
+  codeql-scheduled:
+    name: CodeQL Scheduled Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended,security-and-quality
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3

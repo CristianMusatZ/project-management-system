@@ -14,7 +14,14 @@ interface Project {
   deadline: string;
   ownerId: number;
   memberIds: number[];
+  labelIds: string[];
   createdAt: string;
+}
+
+interface LabelInfo {
+  _id: string;
+  name: string;
+  color: string;
 }
 
 const statusLabels: Record<string, string> = {
@@ -53,6 +60,7 @@ interface ProjectFormData {
   status: string;
   priority: string;
   deadline: string;
+  labelIds: string[];
 }
 
 const emptyForm: ProjectFormData = {
@@ -61,6 +69,7 @@ const emptyForm: ProjectFormData = {
   status: 'planning',
   priority: 'medium',
   deadline: '',
+  labelIds: [],
 };
 
 export default function ProjectsPage() {
@@ -78,8 +87,11 @@ export default function ProjectsPage() {
 
   const canManage = user?.role === 'admin' || user?.role === 'project_manager';
 
+  const [labels, setLabels] = useState<LabelInfo[]>([]);
+
   useEffect(() => {
     fetchProjects();
+    api.get('/labels').then((res) => setLabels(res.data.labels || [])).catch(() => {});
   }, []);
 
   async function fetchProjects() {
@@ -109,6 +121,7 @@ export default function ProjectsPage() {
       status: project.status,
       priority: project.priority,
       deadline: project.deadline ? project.deadline.split('T')[0] : '',
+      labelIds: project.labelIds || [],
     });
     setError('');
     setShowModal(true);
@@ -255,13 +268,23 @@ export default function ProjectsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColors[project.status]}`}>
                     {statusLabels[project.status]}
                   </span>
                   <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${priorityColors[project.priority]}`}>
                     {priorityLabels[project.priority]}
                   </span>
+                  {(project.labelIds || []).map((lid) => {
+                    const lbl = labels.find((l) => l._id === lid);
+                    if (!lbl) return null;
+                    return (
+                      <span key={lid} className="text-xs font-medium px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: lbl.color + '25', color: lbl.color }}>
+                        {lbl.name}
+                      </span>
+                    );
+                  })}
                 </div>
 
                 <div className="flex items-center text-xs text-gray-400 gap-1">
@@ -354,6 +377,40 @@ export default function ProjectsPage() {
                   required
                 />
               </div>
+
+              {labels.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Etichete</label>
+                  <div className="flex flex-wrap gap-2">
+                    {labels.map((lbl) => {
+                      const selected = form.labelIds.includes(lbl._id);
+                      return (
+                        <button
+                          key={lbl._id}
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              labelIds: selected
+                                ? f.labelIds.filter((id) => id !== lbl._id)
+                                : [...f.labelIds, lbl._id],
+                            }))
+                          }
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition border"
+                          style={{
+                            backgroundColor: selected ? lbl.color + '30' : 'transparent',
+                            color: lbl.color,
+                            borderColor: selected ? lbl.color : lbl.color + '60',
+                          }}
+                        >
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} />
+                          {lbl.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button

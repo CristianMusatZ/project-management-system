@@ -17,6 +17,7 @@ export interface ITask extends Document {
   deadline: Date | null;
   comments: IComment[];
   attachments: string[];
+  labelIds: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,6 +51,7 @@ const TaskSchema = new Schema<ITask>(
     deadline: { type: Date, default: null },
     comments: [CommentSchema],
     attachments: [{ type: String }],
+    labelIds: [{ type: Schema.Types.ObjectId, ref: 'Label' }],
   },
   {
     timestamps: true,

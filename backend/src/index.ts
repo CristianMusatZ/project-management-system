@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import { connectPostgres } from './config/postgres';
 import { connectMongo } from './config/mongo';
 import authRoutes from './routes/auth.routes';
@@ -11,6 +12,7 @@ import projectRoutes from './routes/project.routes';
 import taskRoutes from './routes/task.routes';
 import notificationRoutes from './routes/notification.routes';
 import settingsRoutes from './routes/settings.routes';
+import labelRoutes from './routes/label.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -66,6 +68,10 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/labels', labelRoutes);
+
+// Servire fișiere uploadate (atașamente la sarcini)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ============================
 // Error Handler (must be last)
