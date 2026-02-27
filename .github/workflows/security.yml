@@ -18,7 +18,8 @@ jobs:
   snyk-monitor:
     name: Snyk Monitor
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # Skip dacă SNYK_TOKEN nu e configurat
+    if: ${{ secrets.SNYK_TOKEN != '' }}
 
     steps:
       - uses: actions/checkout@v4

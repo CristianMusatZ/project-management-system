@@ -110,13 +110,14 @@ jobs:
   # Job 4: Snyk — SAST + SCA (Software Composition Analysis)
   # Necesită secret SNYK_TOKEN în GitHub → Settings → Secrets
   # Obținut gratuit de pe snyk.io (cont free disponibil)
+  # Job-ul este SKIP-uit automat dacă SNYK_TOKEN nu e configurat.
   # ════════════════════════════════════════════════════
   snyk-scan:
     name: Snyk Security Scan
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-test]
-    # Nu bloca pipeline-ul dacă Snyk nu este configurat
-    continue-on-error: true
+    # Rulează doar dacă SNYK_TOKEN este setat în GitHub Secrets
+    if: ${{ secrets.SNYK_TOKEN != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -135,11 +136,7 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      - name: Snyk auth check
-        run: snyk auth ${{ secrets.SNYK_TOKEN }}
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
+      # Snyk CLI citește automat SNYK_TOKEN din env — nu e nevoie de "snyk auth"
       - name: Snyk — Scan backend (SCA + SAST)
         run: |
           cd backend
