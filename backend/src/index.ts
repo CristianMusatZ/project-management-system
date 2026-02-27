@@ -1,9 +1,15 @@
+import dotenv from 'dotenv';
+import path from 'path';
+// process.cwd() = backend/ când rulezi "npm run dev" din backend/
+// Caută .env în root-ul proiectului
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+// Fallback: .env în backend/ (Docker sau backend/.env separat)
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import path from 'path';
 import { connectPostgres } from './config/postgres';
 import { connectMongo } from './config/mongo';
 import authRoutes from './routes/auth.routes';
