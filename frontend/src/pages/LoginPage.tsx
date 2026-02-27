@@ -72,12 +72,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Nu aveți cont?{' '}
-          <Link to="/register" className="text-primary-600 hover:underline font-medium">
-            Înregistrare
+        <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
+          <Link to="/forgot-password" className="text-primary-600 hover:underline">
+            Ai uitat parola?
           </Link>
-        </p>
+          <span>
+            Nu ai cont?{' '}
+            <Link to="/register" className="text-primary-600 hover:underline font-medium">
+              Înregistrare
+            </Link>
+          </span>
+        </div>
       </div>
     </div>
   );

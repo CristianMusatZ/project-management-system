@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft, Plus, X, AlertCircle, GripVertical,
   Calendar, MessageSquare, Trash2, Pencil, Users, UserPlus, UserMinus,
+  Paperclip, Download, Upload,
 } from 'lucide-react';
 
 interface Task {
@@ -17,7 +18,15 @@ interface Task {
   reporterId: number;
   deadline: string | null;
   comments: { _id: string; userId: number; text: string; createdAt: string }[];
+  attachments: string[];
+  labelIds: string[];
   createdAt: string;
+}
+
+interface LabelInfo {
+  _id: string;
+  name: string;
+  color: string;
 }
 
 interface Project {
@@ -66,6 +75,7 @@ interface TaskFormData {
   deadline: string;
   status: string;
   assigneeId: string;
+  labelIds: string[];
 }
 
 const emptyTaskForm: TaskFormData = {
@@ -75,6 +85,7 @@ const emptyTaskForm: TaskFormData = {
   deadline: '',
   status: 'todo',
   assigneeId: '',
+  labelIds: [],
 };
 
 export default function ProjectDetailPage() {
@@ -97,6 +108,10 @@ export default function ProjectDetailPage() {
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [addMemberId, setAddMemberId] = useState('');
   const [membersError, setMembersError] = useState('');
+  const [showAttachmentsModal, setShowAttachmentsModal] = useState<Task | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [labels, setLabels] = useState<LabelInfo[]>([]);
 
   const canManage = user?.role === 'admin' || user?.role === 'project_manager';
   const canEditTasks = canManage || user?.role === 'member';
@@ -124,8 +139,9 @@ export default function ProjectDetailPage() {
     fetchData();
   }, [fetchData]);
 
-  // Fetch users list for admin/PM (for assignee dropdown and member management)
+  // Fetch users list for admin/PM + labels for all
   useEffect(() => {
+    api.get('/labels').then((res) => setLabels(res.data.labels || [])).catch(() => {});
     if (canManage) {
       api.get('/users/list')
         .then((res) => setUsers(res.data.users || []))
@@ -149,6 +165,7 @@ export default function ProjectDetailPage() {
       deadline: task.deadline ? task.deadline.split('T')[0] : '',
       status: task.status,
       assigneeId: task.assigneeId != null ? String(task.assigneeId) : '',
+      labelIds: task.labelIds || [],
     });
     setError('');
     setShowTaskModal(true);
@@ -263,6 +280,83 @@ export default function ProjectDetailPage() {
     return u ? `${u.first_name} ${u.last_name}` : `#${userId}`;
   }
 
+  // Attachments
+  const UPLOADS_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace('/api', '');
+
+  async function handleUploadAttachment(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !showAttachmentsModal) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setAttachmentError('Fișierul depășește limita de 10 MB.');
+      return;
+    }
+
+    setAttachmentError('');
+    setUploadingAttachment(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Eliminăm prefixul "data:...;base64,"
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const res = await api.post(`/tasks/${showAttachmentsModal._id}/attachments`, {
+        filename: file.name,
+        data: base64,
+        mimeType: file.type,
+      });
+
+      // Actualizare locală a task-ului
+      const updatedAttachments: string[] = res.data.attachments;
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === showAttachmentsModal._id ? { ...t, attachments: updatedAttachments } : t
+        )
+      );
+      setShowAttachmentsModal((prev) =>
+        prev ? { ...prev, attachments: updatedAttachments } : prev
+      );
+    } catch (err: any) {
+      setAttachmentError(err.response?.data?.error || 'Eroare la încărcarea fișierului.');
+    } finally {
+      setUploadingAttachment(false);
+      // Resetare input
+      e.target.value = '';
+    }
+  }
+
+  async function handleDeleteAttachment(filename: string) {
+    if (!showAttachmentsModal) return;
+    if (!window.confirm(`Ștergi atașamentul "${filename.substring(filename.indexOf('_') + 1)}"?`)) return;
+
+    try {
+      const res = await api.delete(`/tasks/${showAttachmentsModal._id}/attachments/${encodeURIComponent(filename)}`);
+      const updatedAttachments: string[] = res.data.attachments;
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === showAttachmentsModal._id ? { ...t, attachments: updatedAttachments } : t
+        )
+      );
+      setShowAttachmentsModal((prev) =>
+        prev ? { ...prev, attachments: updatedAttachments } : prev
+      );
+    } catch {
+      setAttachmentError('Eroare la ștergerea atașamentului.');
+    }
+  }
+
+  function getAttachmentLabel(filename: string) {
+    // Elimină prefixul timestamp de la numele fișierului (ex: 1234567890_document.pdf → document.pdf)
+    const idx = filename.indexOf('_');
+    return idx !== -1 ? filename.substring(idx + 1) : filename;
+  }
+
   if (loading) return <div className="p-6 text-center text-gray-400">Se încarcă...</div>;
   if (!project) return <div className="p-6 text-center text-red-500">Proiect negăsit.</div>;
 
@@ -348,6 +442,20 @@ export default function ProjectDetailPage() {
                         {task.description && (
                           <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.description}</p>
                         )}
+                        {(task.labelIds?.length > 0) && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {task.labelIds.map((lid) => {
+                              const lbl = labels.find((l) => l._id === lid);
+                              if (!lbl) return null;
+                              return (
+                                <span key={lid} className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                  style={{ backgroundColor: lbl.color + '25', color: lbl.color }}>
+                                  {lbl.name}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         <div className="flex items-center gap-3 mt-2 flex-wrap">
                           <span className="text-xs text-gray-400">
                             {priorityLabels[task.priority]}
@@ -369,6 +477,12 @@ export default function ProjectDetailPage() {
                               {task.comments.length}
                             </span>
                           )}
+                          {task.attachments?.length > 0 && (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Paperclip className="w-3 h-3" />
+                              {task.attachments.length}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -387,10 +501,19 @@ export default function ProjectDetailPage() {
                       <button
                         onClick={() => { setShowCommentModal(task); setCommentText(''); }}
                         className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-                        title="Comentariu"
+                        title="Comentarii"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
                       </button>
+                      {canEditTasks && (
+                        <button
+                          onClick={() => { setShowAttachmentsModal(task); setAttachmentError(''); }}
+                          className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                          title="Atașamente"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {canManage && (
                         <button
                           onClick={() => handleDeleteTask(task._id)}
@@ -514,6 +637,40 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
+              {labels.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Etichete</label>
+                  <div className="flex flex-wrap gap-2">
+                    {labels.map((lbl) => {
+                      const selected = taskForm.labelIds.includes(lbl._id);
+                      return (
+                        <button
+                          key={lbl._id}
+                          type="button"
+                          onClick={() =>
+                            setTaskForm((f) => ({
+                              ...f,
+                              labelIds: selected
+                                ? f.labelIds.filter((id) => id !== lbl._id)
+                                : [...f.labelIds, lbl._id],
+                            }))
+                          }
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition border"
+                          style={{
+                            backgroundColor: selected ? lbl.color + '30' : 'transparent',
+                            color: lbl.color,
+                            borderColor: selected ? lbl.color : lbl.color + '60',
+                          }}
+                        >
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} />
+                          {lbl.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -580,6 +737,87 @@ export default function ProjectDetailPage() {
                 >
                   Trimite
                 </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Attachments Modal */}
+      {showAttachmentsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAttachmentsModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900 truncate pr-2">
+                Atașamente — {showAttachmentsModal.title}
+              </h2>
+              <button onClick={() => setShowAttachmentsModal(null)} className="p-1 hover:bg-gray-100 rounded flex-shrink-0">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {attachmentError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {attachmentError}
+              </div>
+            )}
+
+            {/* Lista atașamente existente */}
+            <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+              {showAttachmentsModal.attachments?.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">Niciun atașament.</p>
+              ) : (
+                showAttachmentsModal.attachments?.map((filename) => (
+                  <div key={filename} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg group">
+                    <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="flex-1 text-sm text-gray-700 truncate" title={getAttachmentLabel(filename)}>
+                      {getAttachmentLabel(filename)}
+                    </span>
+                    <a
+                      href={`${UPLOADS_BASE}/uploads/${filename}`}
+                      download={getAttachmentLabel(filename)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1.5 hover:bg-primary-50 rounded text-gray-400 hover:text-primary-600 transition"
+                      title="Descarcă"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+                    {canEditTasks && (
+                      <button
+                        onClick={() => handleDeleteAttachment(filename)}
+                        className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition"
+                        title="Șterge"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Upload fișier */}
+            {canEditTasks && (
+              <div>
+                <label
+                  className={`flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed rounded-lg cursor-pointer transition
+                    ${uploadingAttachment
+                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                      : 'border-primary-300 hover:border-primary-500 hover:bg-primary-50 text-primary-600'
+                    }`}
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm font-medium">
+                    {uploadingAttachment ? 'Se încarcă...' : 'Alege fișier (max 10 MB)'}
+                  </span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadingAttachment}
+                    onChange={handleUploadAttachment}
+                  />
+                </label>
               </div>
             )}
           </div>

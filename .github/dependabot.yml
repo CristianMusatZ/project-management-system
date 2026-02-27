@@ -1,0 +1,66 @@
+version: 2
+
+updates:
+  # ─────────────────────────────────────────────
+  # Backend Node.js dependencies
+  # ─────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: "Europe/Bucharest"
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - backend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Grupează toate update-urile de tipuri TypeScript într-un singur PR
+      typescript-types:
+        patterns:
+          - "@types/*"
+      # Grupează dependențele de development
+      dev-dependencies:
+        dependency-type: development
+
+  # ─────────────────────────────────────────────
+  # Frontend Node.js dependencies
+  # ─────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: "Europe/Bucharest"
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      typescript-types:
+        patterns:
+          - "@types/*"
+      dev-dependencies:
+        dependency-type: development
+
+  # ─────────────────────────────────────────────
+  # GitHub Actions versions
+  # ─────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: "Europe/Bucharest"
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "chore(actions)"

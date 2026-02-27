@@ -76,6 +76,16 @@ export async function connectPostgres(): Promise<void> {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
+      -- Tabel tokenuri resetare parolă
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        token VARCHAR(255) UNIQUE NOT NULL,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
       -- Indexuri
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
@@ -84,6 +94,8 @@ export async function connectPostgres(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read);
+      CREATE INDEX IF NOT EXISTS idx_reset_tokens_token ON password_reset_tokens(token);
+      CREATE INDEX IF NOT EXISTS idx_reset_tokens_user ON password_reset_tokens(user_id);
     `);
 
     // Setări implicite (dacă nu există)

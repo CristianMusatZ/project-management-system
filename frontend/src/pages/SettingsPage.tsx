@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { Settings, Shield, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Search } from 'lucide-react';
+import { Settings, Shield, Tag, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Search, Plus, Pencil, Trash2, X } from 'lucide-react';
 
 interface AuditLog {
   id: number;
@@ -51,10 +51,30 @@ const actionColors: Record<string, string> = {
   UPDATE_SETTINGS: 'bg-gray-100 text-gray-700',
 };
 
-type Tab = 'general' | 'audit';
+interface LabelItem {
+  _id: string;
+  name: string;
+  color: string;
+}
+
+const PRESET_COLORS = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#3b82f6', '#6366f1', '#a855f7', '#ec4899',
+  '#14b8a6', '#64748b',
+];
+
+type Tab = 'general' | 'labels' | 'audit';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
+
+  // Labels state
+  const [labels, setLabels] = useState<LabelItem[]>([]);
+  const [labelName, setLabelName] = useState('');
+  const [labelColor, setLabelColor] = useState('#3b82f6');
+  const [editingLabel, setEditingLabel] = useState<LabelItem | null>(null);
+  const [labelMsg, setLabelMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [labelSaving, setLabelSaving] = useState(false);
 
   // General settings
   const [orgName, setOrgName] = useState('');
@@ -69,6 +89,53 @@ export default function SettingsPage() {
   const [filterUserId, setFilterUserId] = useState('');
   const [availableActions, setAvailableActions] = useState<string[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
+
+  // Load labels
+  useEffect(() => {
+    api.get('/labels').then((res) => setLabels(res.data.labels || [])).catch(() => {});
+  }, []);
+
+  async function handleSaveLabel(e: React.FormEvent) {
+    e.preventDefault();
+    if (!labelName.trim()) return;
+    setLabelSaving(true);
+    setLabelMsg(null);
+    try {
+      if (editingLabel) {
+        const res = await api.put(`/labels/${editingLabel._id}`, { name: labelName, color: labelColor });
+        setLabels((prev) => prev.map((l) => (l._id === editingLabel._id ? res.data.label : l)));
+        setLabelMsg({ type: 'success', text: 'Etichetă actualizată.' });
+      } else {
+        const res = await api.post('/labels', { name: labelName, color: labelColor });
+        setLabels((prev) => [...prev, res.data.label]);
+        setLabelMsg({ type: 'success', text: 'Etichetă creată.' });
+      }
+      setLabelName('');
+      setLabelColor('#3b82f6');
+      setEditingLabel(null);
+    } catch (err: any) {
+      setLabelMsg({ type: 'error', text: err.response?.data?.error || 'Eroare la salvare.' });
+    } finally {
+      setLabelSaving(false);
+    }
+  }
+
+  async function handleDeleteLabel(label: LabelItem) {
+    if (!window.confirm(`Ștergi eticheta "${label.name}"? Va fi eliminată și din proiecte/sarcini.`)) return;
+    try {
+      await api.delete(`/labels/${label._id}`);
+      setLabels((prev) => prev.filter((l) => l._id !== label._id));
+    } catch {
+      setLabelMsg({ type: 'error', text: 'Eroare la ștergere.' });
+    }
+  }
+
+  function startEditLabel(label: LabelItem) {
+    setEditingLabel(label);
+    setLabelName(label.name);
+    setLabelColor(label.color);
+    setLabelMsg(null);
+  }
 
   // Load settings
   useEffect(() => {
@@ -150,6 +217,13 @@ export default function SettingsPage() {
           Setări generale
         </button>
         <button
+          onClick={() => setActiveTab('labels')}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'labels' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+        >
+          <Tag className="w-4 h-4" />
+          Etichete
+        </button>
+        <button
           onClick={() => setActiveTab('audit')}
           className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'audit' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
         >
@@ -196,6 +270,107 @@ export default function SettingsPage() {
                 {orgNameSaving ? 'Se salvează...' : 'Salvare'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Labels ── */}
+      {activeTab === 'labels' && (
+        <div className="max-w-2xl space-y-6">
+          {/* Form creare/editare */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="font-semibold text-gray-900 mb-4">
+              {editingLabel ? 'Editare etichetă' : 'Etichetă nouă'}
+            </h2>
+            {labelMsg && (
+              <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${labelMsg.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                {labelMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                {labelMsg.text}
+              </div>
+            )}
+            <form onSubmit={handleSaveLabel} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nume etichetă</label>
+                <input
+                  type="text"
+                  value={labelName}
+                  onChange={(e) => setLabelName(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  placeholder="Ex: Frontend, Bug, Urgent..."
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Culoare</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {PRESET_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setLabelColor(c)}
+                      className="w-7 h-7 rounded-full border-2 transition"
+                      style={{
+                        backgroundColor: c,
+                        borderColor: labelColor === c ? '#1e40af' : 'transparent',
+                        outline: labelColor === c ? `2px solid ${c}` : 'none',
+                        outlineOffset: '2px',
+                      }}
+                    />
+                  ))}
+                  {/* Preview */}
+                  <div className="ml-2 px-3 py-1 rounded-full text-xs font-medium"
+                    style={{ backgroundColor: labelColor + '25', color: labelColor, border: `1px solid ${labelColor}50` }}>
+                    {labelName || 'Preview'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                {editingLabel && (
+                  <button type="button" onClick={() => { setEditingLabel(null); setLabelName(''); setLabelColor('#3b82f6'); setLabelMsg(null); }}
+                    className="flex items-center gap-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm">
+                    <X className="w-4 h-4" /> Anulare
+                  </button>
+                )}
+                <button type="submit" disabled={labelSaving || !labelName.trim()}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition text-sm font-medium">
+                  <Plus className="w-4 h-4" />
+                  {labelSaving ? 'Se salvează...' : editingLabel ? 'Actualizare' : 'Creare'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Lista etichete */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">Etichete existente ({labels.length})</h2>
+            </div>
+            {labels.length === 0 ? (
+              <p className="text-center text-gray-400 text-sm py-8">Nicio etichetă creată încă.</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {labels.map((label) => (
+                  <div key={label._id} className="flex items-center gap-4 px-5 py-3">
+                    <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: label.color }} />
+                    <span className="flex-1 text-sm font-medium text-gray-900">{label.name}</span>
+                    <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                      style={{ backgroundColor: label.color + '20', color: label.color }}>
+                      {label.name}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => startEditLabel(label)}
+                        className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-700 transition">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteLabel(label)}
+                        className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

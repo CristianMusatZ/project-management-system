@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import pool from '../config/postgres';
 import { generateToken } from '../middleware/auth';
 import { UserPayload } from '../types';
@@ -199,5 +200,121 @@ export async function changePassword(req: Request, res: Response): Promise<void>
     res.json({ message: 'Parola a fost schimbată cu succes.' });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la schimbarea parolei.' });
+  }
+}
+
+export async function forgotPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ error: 'Email-ul este obligatoriu.' });
+      return;
+    }
+
+    const result = await pool.query(
+      'SELECT id, first_name FROM users WHERE email = $1 AND is_active = true',
+      [email.toLowerCase()]
+    );
+
+    // Răspuns identic indiferent dacă emailul există (previne enumerarea)
+    if (result.rows.length === 0) {
+      res.json({ message: 'Dacă adresa există, vei primi instrucțiuni de resetare.' });
+      return;
+    }
+
+    const user = result.rows[0];
+
+    // Generare token securizat
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 oră
+
+    // Invalidare tokenuri vechi
+    await pool.query(
+      'UPDATE password_reset_tokens SET used = TRUE WHERE user_id = $1 AND used = FALSE',
+      [user.id]
+    );
+
+    // Inserare token nou
+    await pool.query(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+      [user.id, token, expiresAt]
+    );
+
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
+
+    // În producție, se trimite email. Deocamdată logăm și returnăm link-ul în dev.
+    console.log(`\n🔑 Link resetare parolă pentru ${email}:\n${resetUrl}\n`);
+
+    res.json({
+      message: 'Dacă adresa există, vei primi instrucțiuni de resetare.',
+      // Returnăm link-ul doar în development pentru testare
+      ...(process.env.NODE_ENV !== 'production' && { resetUrl }),
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Eroare la procesarea cererii.' });
+  }
+}
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      res.status(400).json({ error: 'Token-ul și parola nouă sunt obligatorii.' });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: 'Parola trebuie să aibă cel puțin 8 caractere.' });
+      return;
+    }
+
+    // Validare token
+    const result = await pool.query(
+      `SELECT prt.id, prt.user_id, u.email
+       FROM password_reset_tokens prt
+       JOIN users u ON u.id = prt.user_id
+       WHERE prt.token = $1
+         AND prt.used = FALSE
+         AND prt.expires_at > NOW()`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(400).json({ error: 'Token invalid sau expirat. Solicită un nou link de resetare.' });
+      return;
+    }
+
+    const { id: tokenId, user_id: userId } = result.rows[0];
+
+    // Hash parolă nouă
+    const salt = await bcrypt.genSalt(12);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Actualizare parolă
+    await pool.query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+      [passwordHash, userId]
+    );
+
+    // Marcare token ca folosit
+    await pool.query(
+      'UPDATE password_reset_tokens SET used = TRUE WHERE id = $1',
+      [tokenId]
+    );
+
+    // Log audit
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, 'PASSWORD_RESET', 'user', userId.toString(), req.ip]
+    );
+
+    res.json({ message: 'Parola a fost resetată cu succes. Te poți autentifica acum.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Eroare la resetarea parolei.' });
   }
 }
