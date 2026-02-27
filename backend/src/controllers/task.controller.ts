@@ -2,6 +2,14 @@ import { Response } from 'express';
 import Task from '../models/Task';
 import Project from '../models/Project';
 import { AuthRequest } from '../types';
+import { createNotification } from './notification.controller';
+
+const statusLabels: Record<string, string> = {
+  todo: 'De făcut',
+  in_progress: 'În lucru',
+  in_review: 'În review',
+  done: 'Finalizat',
+};
 
 export async function createTask(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -23,6 +31,19 @@ export async function createTask(req: AuthRequest, res: Response): Promise<void>
     });
 
     await task.save();
+
+    // Notificare: sarcina a fost asignată
+    if (assigneeId && Number(assigneeId) !== req.user!.id) {
+      await createNotification(
+        Number(assigneeId),
+        'task_assigned',
+        'Sarcină nouă asignată',
+        `Ai fost asignat la sarcina: "${title}"`,
+        'task',
+        task._id.toString()
+      );
+    }
+
     res.status(201).json({ message: 'Sarcină creată cu succes.', task });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la crearea sarcinii.' });
@@ -90,6 +111,11 @@ export async function updateTask(req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    const oldAssigneeId = existing.assigneeId;
+    const oldStatus = existing.status;
+    const newAssigneeId = req.body.assigneeId !== undefined ? req.body.assigneeId : oldAssigneeId;
+    const newStatus = req.body.status !== undefined ? req.body.status : oldStatus;
+
     const task = await Task.findByIdAndUpdate(
       req.params.id,
       { ...req.body, updatedAt: new Date() },
@@ -99,6 +125,36 @@ export async function updateTask(req: AuthRequest, res: Response): Promise<void>
     if (!task) {
       res.status(404).json({ error: 'Sarcină negăsită.' });
       return;
+    }
+
+    // Notificare: assignee schimbat
+    if (newAssigneeId && newAssigneeId !== oldAssigneeId && Number(newAssigneeId) !== req.user!.id) {
+      await createNotification(
+        Number(newAssigneeId),
+        'task_assigned',
+        'Sarcină asignată',
+        `Ai fost asignat la sarcina: "${existing.title}"`,
+        'task',
+        task._id.toString()
+      );
+    }
+
+    // Notificare: status schimbat — notifică reporterul și assignee-ul (dacă nu e cel care a schimbat)
+    if (newStatus !== oldStatus) {
+      const label = statusLabels[newStatus] || newStatus;
+      const notify = new Set<number>();
+      if (existing.reporterId && existing.reporterId !== req.user!.id) notify.add(existing.reporterId);
+      if (existing.assigneeId && existing.assigneeId !== req.user!.id) notify.add(existing.assigneeId);
+      for (const uid of notify) {
+        await createNotification(
+          uid,
+          'task_status_changed',
+          'Status sarcină actualizat',
+          `Sarcina "${existing.title}" a fost mutată în: ${label}`,
+          'task',
+          task._id.toString()
+        );
+      }
     }
 
     res.json({ message: 'Sarcină actualizată.', task });
@@ -128,6 +184,13 @@ export async function addComment(req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Citim sarcina înainte de update pentru a obține assigneeId și reporterId
+    const existingTask = await Task.findById(req.params.id);
+    if (!existingTask) {
+      res.status(404).json({ error: 'Sarcină negăsită.' });
+      return;
+    }
+
     const task = await Task.findByIdAndUpdate(
       req.params.id,
       {
@@ -141,6 +204,21 @@ export async function addComment(req: AuthRequest, res: Response): Promise<void>
     if (!task) {
       res.status(404).json({ error: 'Sarcină negăsită.' });
       return;
+    }
+
+    // Notificare: comentariu nou — notifică assigneeul și reporterul (nu cel care a comentat)
+    const notify = new Set<number>();
+    if (existingTask.reporterId && existingTask.reporterId !== req.user!.id) notify.add(existingTask.reporterId);
+    if (existingTask.assigneeId && existingTask.assigneeId !== req.user!.id) notify.add(existingTask.assigneeId);
+    for (const uid of notify) {
+      await createNotification(
+        uid,
+        'comment_added',
+        'Comentariu nou',
+        `Comentariu nou pe sarcina: "${existingTask.title}"`,
+        'task',
+        task._id.toString()
+      );
     }
 
     res.json({ message: 'Comentariu adăugat.', task });
