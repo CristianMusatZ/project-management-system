@@ -22,6 +22,7 @@ WORKDIR /app
 COPY --from=build /app/package*.json ./
 RUN npm ci --only=production
 COPY --from=build /app/dist ./dist
+RUN mkdir -p /app/uploads && chown -R node:node /app/uploads
 EXPOSE 4000
 USER node
 CMD ["node", "dist/index.js"]
