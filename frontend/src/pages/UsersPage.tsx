@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { Users, UserCheck, UserX, UserPlus, X, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Users, UserCheck, UserX, UserPlus, X, AlertCircle, Trash2 } from 'lucide-react';
 
 interface UserItem {
   id: number;
@@ -36,12 +37,18 @@ const roleColors: Record<string, string> = {
 };
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateUserForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState('');
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -74,6 +81,21 @@ export default function UsersPage() {
       fetchUsers();
     } catch {
       alert('Eroare la actualizarea statusului.');
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/users/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      fetchUsers();
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.error || 'Eroare la ștergere.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -171,19 +193,75 @@ export default function UsersPage() {
                       {new Date(u.created_at).toLocaleDateString('ro-RO')}
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => handleToggleActive(u.id)}
-                        className={`p-2 rounded-lg transition ${u.is_active ? 'hover:bg-red-50 text-gray-400 hover:text-red-500' : 'hover:bg-green-50 text-gray-400 hover:text-green-500'}`}
-                        title={u.is_active ? 'Dezactivare' : 'Activare'}
-                      >
-                        {u.is_active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleToggleActive(u.id)}
+                          className={`p-2 rounded-lg transition ${u.is_active ? 'hover:bg-orange-50 text-gray-400 hover:text-orange-500' : 'hover:bg-green-50 text-gray-400 hover:text-green-500'}`}
+                          title={u.is_active ? 'Dezactivare cont' : 'Activare cont'}
+                        >
+                          {u.is_active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                        </button>
+                        {currentUser?.id !== u.id && (
+                          <button
+                            onClick={() => { setDeleteTarget(u); setDeleteError(''); }}
+                            className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition"
+                            title="Ștergere permanentă"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteTarget(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Ștergere permanentă</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Ești sigur că vrei să ștergi permanent contul lui{' '}
+                  <strong className="text-gray-800">{deleteTarget.first_name} {deleteTarget.last_name}</strong>?
+                </p>
+                <p className="text-xs text-red-500 mt-2">
+                  Această acțiune este ireversibilă. Utilizatorul va fi eliminat din toate proiectele și sarcinile sale vor fi deasignate.
+                </p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
+              >
+                Anulare
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={deleting}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition font-medium text-sm"
+              >
+                {deleting ? 'Se șterge...' : 'Șterge permanent'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
