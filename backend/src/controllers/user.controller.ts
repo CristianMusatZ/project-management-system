@@ -2,6 +2,8 @@ import { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../config/postgres';
 import { AuthRequest } from '../types';
+import Project from '../models/Project';
+import Task from '../models/Task';
 
 // Listă simplificată (id + nume) pentru dropdown-uri — accesibilă admin + PM
 export async function getUsersList(req: AuthRequest, res: Response): Promise<void> {
@@ -143,5 +145,80 @@ export async function toggleUserActive(req: AuthRequest, res: Response): Promise
     res.json({ message: 'Status actualizat.', user: result.rows[0] });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la actualizarea statusului.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/users/:id  — ștergere permanentă utilizator (doar admin)
+// Nu poți șterge propriul cont sau ultimul admin din sistem.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function deleteUser(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const targetId = parseInt(id, 10);
+
+    // Nu poți șterge propriul cont
+    if (req.user!.id === targetId) {
+      res.status(400).json({ error: 'Nu îți poți șterge propriul cont.' });
+      return;
+    }
+
+    // Verificare utilizator există
+    const userResult = await pool.query(
+      'SELECT id, email, first_name, last_name, role FROM users WHERE id = $1',
+      [targetId]
+    );
+    if (!userResult.rows.length) {
+      res.status(404).json({ error: 'Utilizator negăsit.' });
+      return;
+    }
+    const target = userResult.rows[0];
+
+    // Protecție: nu șterge ultimul admin
+    if (target.role === 'admin') {
+      const adminCount = await pool.query(
+        "SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = true"
+      );
+      if (parseInt(adminCount.rows[0].count, 10) <= 1) {
+        res.status(400).json({ error: 'Nu poți șterge singurul administrator activ.' });
+        return;
+      }
+    }
+
+    // ── MongoDB cleanup ──────────────────────────────────────────────────────
+    // Eliminare din membri proiecte (memberIds e array de Number)
+    await Project.updateMany(
+      { memberIds: targetId },
+      { $pull: { memberIds: targetId } }
+    );
+    // Deasignare sarcini (assigneeId e Number)
+    await Task.updateMany(
+      { assigneeId: targetId },
+      { $set: { assigneeId: null } }
+    );
+
+    // ── PostgreSQL cleanup ───────────────────────────────────────────────────
+    // Audit logs: setăm user_id = NULL (referință nullabilă, păstrăm istoricul)
+    await pool.query('UPDATE audit_logs SET user_id = NULL WHERE user_id = $1', [targetId]);
+    // Ștergere user (CASCADE pe sessions + notifications)
+    await pool.query('DELETE FROM users WHERE id = $1', [targetId]);
+
+    // Audit log pentru acțiunea de ștergere (cu adminul care a efectuat-o)
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        req.user!.id,
+        'DELETE_USER',
+        'user',
+        String(targetId),
+        JSON.stringify({ deletedEmail: target.email, deletedName: `${target.first_name} ${target.last_name}` }),
+      ]
+    );
+
+    res.json({ message: `Utilizatorul ${target.first_name} ${target.last_name} a fost șters permanent.` });
+  } catch (error) {
+    console.error('[User] deleteUser error:', error);
+    res.status(500).json({ error: 'Eroare la ștergerea utilizatorului.' });
   }
 }
