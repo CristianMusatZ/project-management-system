@@ -53,6 +53,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotif, setShowNotif] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const [orgLogo, setOrgLogo] = useState<string>('');
+  const [orgName, setOrgName] = useState<string>('PMS');
 
   const filteredNav = navItems.filter(
     (item) => !item.roles || (user && item.roles.includes(user.role))
@@ -71,6 +73,14 @@ export default function Layout({ children }: { children: ReactNode }) {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000); // poll la 30s
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    api.get('/settings').then((res) => {
+      const s = res.data.settings || {};
+      if (s.org_logo) setOrgLogo(s.org_logo);
+      if (s.org_name) setOrgName(s.org_name);
+    }).catch(() => {});
   }, []);
 
   // Click outside to close
@@ -109,8 +119,14 @@ export default function Layout({ children }: { children: ReactNode }) {
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <FolderKanban className="w-8 h-8 text-primary-600" />
-          <span className="ml-3 text-lg font-bold text-gray-900">PMS</span>
+          {orgLogo ? (
+            <img src={orgLogo} alt={orgName} className="max-h-11 max-w-[200px] w-full object-contain" />
+          ) : (
+            <>
+              <FolderKanban className="w-8 h-8 text-primary-600 flex-shrink-0" />
+              <span className="ml-3 text-lg font-bold text-gray-900 truncate">{orgName}</span>
+            </>
+          )}
         </div>
 
         {/* Navigation */}
