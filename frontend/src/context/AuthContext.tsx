@@ -13,7 +13,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ requiresMFA?: boolean; tempToken?: string } | void>;
   register: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -38,6 +38,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const res = await api.post('/auth/login', { email, password });
+    // Admin cu MFA activat — returnăm datele pentru step 2
+    if (res.data.requiresMFA) {
+      return { requiresMFA: true, tempToken: res.data.tempToken };
+    }
     const { token: newToken, user: newUser } = res.data;
     setToken(newToken);
     setUser(newUser);

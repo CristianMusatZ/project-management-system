@@ -10,7 +10,7 @@ Sistem informatic web pentru generarea de rapoarte și administrarea proiectelor
 | **Backend** | Node.js + Express.js + TypeScript |
 | **DB SQL** | PostgreSQL 16 (utilizatori, autentificare, notificări, setări, audit) |
 | **DB NoSQL** | MongoDB 7 (proiecte, sarcini, comentarii, atașamente) |
-| **Autentificare** | JWT + bcrypt + RBAC |
+| **Autentificare** | JWT + bcrypt + RBAC + TOTP MFA (admin) |
 | **Containerizare** | Docker + Docker Compose |
 | **CI/CD** | GitHub Actions |
 | **Security** | Helmet, rate-limit, CodeQL, npm audit |
@@ -121,6 +121,12 @@ Asta pornește automat:
 - Asociere etichete la proiecte și sarcini (multi-select)
 - Badge-uri colorate pe carduri; picker de etichete în modalele de creare/editare
 
+### Autentificare Multi-Factor (MFA) — Admin
+- Activare/dezactivare 2FA TOTP exclusiv pentru contul de admin
+- Flow de setup: generare secret → scanare QR code cu Google Authenticator / Authy → confirmare cod
+- Login în 2 pași: parolă → cod TOTP de 6 cifre (fereastră ±30 s)
+- Implementare RFC 6238 nativă — fără dependențe externe (built-in `crypto`)
+
 ### Setări & Audit (Admin)
 - Setări generale organizație (nume firmă)
 - Jurnal de activitate paginat cu filtre pe acțiune și utilizator
@@ -196,6 +202,15 @@ Asta pornește automat:
 | PUT | `/api/labels/:id` | Editare etichetă (Admin) 🔒 |
 | DELETE | `/api/labels/:id` | Ștergere etichetă + cascade (Admin) 🔒 |
 
+### MFA (Admin only)
+| Metodă | Endpoint | Descriere |
+|--------|----------|-----------|
+| GET | `/api/mfa/status` | Status MFA activ/inactiv 🔒 |
+| GET | `/api/mfa/setup` | Generare secret + URI QR code 🔒 |
+| POST | `/api/mfa/enable` | Activare MFA (confirmare cod TOTP) 🔒 |
+| POST | `/api/mfa/disable` | Dezactivare MFA (confirmare cod TOTP) 🔒 |
+| POST | `/api/mfa/verify` | Validare cod TOTP la login (step 2) 🔒 |
+
 ### Uploads
 | Metodă | Endpoint | Descriere |
 |--------|----------|-----------|
@@ -221,6 +236,8 @@ Asta pornește automat:
 - `notifications` — notificări per utilizator
 - `settings` — setări cheie-valoare
 - `password_reset_tokens` — tokeni resetare parolă (expiră în 1h)
+- `users.mfa_secret` — secret TOTP criptat (coloană adăugată non-destructiv)
+- `users.mfa_enabled` — flag activare MFA per utilizator
 
 ### MongoDB
 - `projects` — proiecte cu membri, metadate și etichete asociate
