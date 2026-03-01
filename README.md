@@ -2,6 +2,33 @@
 
 Sistem informatic web pentru generarea de rapoarte și administrarea proiectelor din cadrul unei organizații.
 
+## 🌐 Demo Live (Railway)
+
+Aplicația este deployată pe [Railway](https://railway.app) și accesibilă public:
+
+| Serviciu | URL |
+|----------|-----|
+| **Frontend** | [https://project-management-system-production-1fa2.up.railway.app](https://project-management-system-production-1fa2.up.railway.app) |
+| **Backend API** | [https://project-management-system-production-e19f.up.railway.app/api](https://project-management-system-production-e19f.up.railway.app/api) |
+| **Health Check** | [https://project-management-system-production-e19f.up.railway.app/api/health](https://project-management-system-production-e19f.up.railway.app/api/health) |
+
+### Infrastructură Railway
+
+| Serviciu | Tehnologie | Detalii |
+|----------|-----------|---------|
+| **PMS - Frontend** | Docker + nginx 1.29.5 | Port 8081, regiune EU |
+| **PMS - Backend** | Docker + Node.js 20 | Port 8080, regiune EU |
+| **Postgres** | Railway PostgreSQL | Volum persistent |
+| **MongoDB** | Railway MongoDB | Volum persistent |
+
+### Note deployment
+- **Primul utilizator** înregistrat în aplicație primește automat rolul de `admin`
+- Variabilele de mediu sunt configurate în Railway Dashboard → fiecare serviciu → Variables
+- Build-ul frontend-ului primește `VITE_API_URL` ca Docker build argument (bake-uit la compile time de Vite)
+- Backend-ul suportă atât `DATABASE_URL` (Railway) cât și variabile individuale `POSTGRES_*` (local Docker Compose)
+
+---
+
 ## Tech Stack
 
 | Categorie | Tehnologie |
