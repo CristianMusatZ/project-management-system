@@ -19,6 +19,7 @@ RUN npm run build
 # ---- Production (serve with nginx) ----
 FROM nginx:1.29.5-alpine3.23-slim AS production
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+EXPOSE 8081
+ENV PORT=8081
 CMD ["nginx", "-g", "daemon off;"]
