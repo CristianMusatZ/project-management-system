@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 52" fill="none">
+  <!-- Icon background -->
+  <rect x="0" y="2" width="48" height="48" rx="10" fill="url(#grad)"/>
+
+  <!-- Clipboard top bar -->
+  <rect x="14" y="8" width="20" height="5" rx="2.5" fill="white" opacity="0.9"/>
+
+  <!-- Clipboard body lines -->
+  <rect x="10" y="16" width="28" height="3" rx="1.5" fill="white" opacity="0.75"/>
+  <rect x="10" y="23" width="22" height="3" rx="1.5" fill="white" opacity="0.75"/>
+  <rect x="10" y="30" width="25" height="3" rx="1.5" fill="white" opacity="0.75"/>
+
+  <!-- Check mark -->
+  <polyline points="10,39 14,44 22,35" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- PMS text -->
+  <text x="60" y="30" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="24" font-weight="800" fill="#1e293b" letter-spacing="-0.5">PMS</text>
+
+  <!-- Subtitle -->
+  <text x="61" y="44" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="10" font-weight="500" fill="#64748b" letter-spacing="0.2">Project Management</text>
+
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="48" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+</svg>
