@@ -8,10 +8,13 @@ const api = axios.create({
 });
 
 // Interceptor: adaugă token-ul JWT la fiecare request
+// Nu suprascrie dacă header-ul Authorization e deja setat explicit (ex. tempToken pentru MFA)
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!config.headers.Authorization) {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
