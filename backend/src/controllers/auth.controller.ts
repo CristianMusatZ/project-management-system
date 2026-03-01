@@ -38,12 +38,17 @@ export async function register(req: Request, res: Response): Promise<void> {
     const emailVerified = !smtpOk;
     const verificationToken = smtpOk ? crypto.randomBytes(32).toString('hex') : null;
 
+    // Primul utilizator înregistrat devine automat admin
+    const userCount = await pool.query('SELECT COUNT(*) FROM users');
+    const isFirstUser = parseInt(userCount.rows[0].count) === 0;
+    const role = isFirstUser ? 'admin' : 'member';
+
     // Inserare utilizator
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, first_name, last_name, role, is_active, email_verified, email_verification_token)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, email, first_name, last_name, role, created_at`,
-      [email.toLowerCase(), passwordHash, firstName, lastName, 'member', isActive, emailVerified, verificationToken]
+      [email.toLowerCase(), passwordHash, firstName, lastName, role, isActive, emailVerified, verificationToken]
     );
 
     const user = result.rows[0];
