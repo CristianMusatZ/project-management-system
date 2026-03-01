@@ -25,8 +25,15 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
 
 export function generateToken(payload: UserPayload): string {
   return jwt.sign(
-    { id: payload.id, email: payload.email, role: payload.role, firstName: payload.firstName, lastName: payload.lastName },
+    {
+      id: payload.id,
+      email: payload.email,
+      role: payload.role,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      ...(payload.mfaPending && { mfaPending: true }),
+    },
     JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn: payload.mfaPending ? '5m' : '24h' }
   );
 }

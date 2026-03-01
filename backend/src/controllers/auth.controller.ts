@@ -98,7 +98,6 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Generare token
     const payload: UserPayload = {
       id: user.id,
       email: user.email,
@@ -106,6 +105,17 @@ export async function login(req: Request, res: Response): Promise<void> {
       firstName: user.first_name,
       lastName: user.last_name,
     };
+
+    // MFA — doar pentru admini cu MFA activat
+    if (user.role === 'admin' && user.mfa_enabled) {
+      // Emitem un token temporar (expiră în 5 min) marcat ca mfaPending
+      const tempToken = generateToken({ ...payload, mfaPending: true });
+      // Nu logăm audit login complet până la verificarea MFA
+      res.json({ requiresMFA: true, tempToken });
+      return;
+    }
+
+    // Generare token complet (non-admin sau admin fără MFA)
     const token = generateToken(payload);
 
     // Log audit
