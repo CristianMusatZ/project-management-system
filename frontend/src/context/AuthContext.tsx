@@ -14,7 +14,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ requiresMFA?: boolean; tempToken?: string } | void>;
-  register: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
+  register: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<{ requiresEmailVerification?: boolean } | void>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
 }
@@ -51,6 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: { email: string; password: string; firstName: string; lastName: string }) => {
     const res = await api.post('/auth/register', data);
+    // Dacă SMTP e configurat, backend-ul cere confirmare email (nu returnează token)
+    if (res.data.requiresEmailVerification) {
+      return { requiresEmailVerification: true };
+    }
     const { token: newToken, user: newUser } = res.data;
     setToken(newToken);
     setUser(newUser);

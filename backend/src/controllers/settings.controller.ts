@@ -50,6 +50,63 @@ export async function updateSettings(req: AuthRequest, res: Response): Promise<v
 }
 
 // -------------------------------------------------------
+// PUT /api/settings/logo  — upload logo organizație (base64), doar admin
+// Body: { logo: "data:image/png;base64,..." }
+// -------------------------------------------------------
+export async function uploadLogo(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { logo } = req.body;
+
+    if (!logo || typeof logo !== 'string') {
+      res.status(400).json({ error: 'Logo-ul este obligatoriu.' });
+      return;
+    }
+
+    // Acceptăm doar imagini (PNG, JPG, GIF, WebP, SVG)
+    if (!logo.startsWith('data:image/')) {
+      res.status(400).json({ error: 'Fișierul trebuie să fie o imagine (PNG, JPG, SVG, WebP).' });
+      return;
+    }
+
+    // Limităm la 2MB în base64 (~1.5MB fișier real)
+    if (logo.length > 2_800_000) {
+      res.status(400).json({ error: 'Logo-ul este prea mare. Dimensiunea maximă este 2 MB.' });
+      return;
+    }
+
+    await pool.query(
+      `INSERT INTO settings (key, value, updated_at)
+       VALUES ('org_logo', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [logo]
+    );
+
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id)
+       VALUES ($1, $2, $3, $4)`,
+      [req.user!.id, 'UPDATE_SETTINGS', 'settings', 'org_logo']
+    );
+
+    res.json({ message: 'Logo actualizat cu succes.' });
+  } catch (error) {
+    console.error('[Settings] uploadLogo error:', error);
+    res.status(500).json({ error: 'Eroare la salvarea logo-ului.' });
+  }
+}
+
+// -------------------------------------------------------
+// DELETE /api/settings/logo  — ștergere logo, doar admin
+// -------------------------------------------------------
+export async function deleteLogo(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    await pool.query(`DELETE FROM settings WHERE key = 'org_logo'`);
+    res.json({ message: 'Logo eliminat.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare la ștergerea logo-ului.' });
+  }
+}
+
+// -------------------------------------------------------
 // GET /api/settings/audit-logs  — doar admin, paginat
 // -------------------------------------------------------
 export async function getAuditLogs(req: AuthRequest, res: Response): Promise<void> {

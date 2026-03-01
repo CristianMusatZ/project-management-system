@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import pool from '../config/postgres';
 import { generateToken } from '../middleware/auth';
 import { UserPayload } from '../types';
+import { sendEmailVerificationEmail, isSmtpConfigured } from '../services/email.service';
 
 export async function register(req: Request, res: Response): Promise<void> {
   try {
@@ -31,25 +32,21 @@ export async function register(req: Request, res: Response): Promise<void> {
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const smtpOk = isSmtpConfigured();
+    // Dacă SMTP e configurat, contul începe neactivat până la confirmare email
+    const isActive = !smtpOk;
+    const emailVerified = !smtpOk;
+    const verificationToken = smtpOk ? crypto.randomBytes(32).toString('hex') : null;
+
     // Inserare utilizator
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, first_name, last_name, role)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (email, password_hash, first_name, last_name, role, is_active, email_verified, email_verification_token)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, email, first_name, last_name, role, created_at`,
-      [email.toLowerCase(), passwordHash, firstName, lastName, 'member']
+      [email.toLowerCase(), passwordHash, firstName, lastName, 'member', isActive, emailVerified, verificationToken]
     );
 
     const user = result.rows[0];
-
-    // Generare token
-    const payload: UserPayload = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      firstName: user.first_name,
-      lastName: user.last_name,
-    };
-    const token = generateToken(payload);
 
     // Log audit
     await pool.query(
@@ -58,10 +55,36 @@ export async function register(req: Request, res: Response): Promise<void> {
       [user.id, 'REGISTER', 'user', user.id.toString(), req.ip]
     );
 
+    // Dacă SMTP nu e configurat → auto-activat, returnăm token direct
+    if (!smtpOk) {
+      const payload: UserPayload = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        firstName: user.first_name,
+        lastName: user.last_name,
+      };
+      const token = generateToken(payload);
+      res.status(201).json({
+        message: 'Cont creat cu succes.',
+        token,
+        user: payload,
+      });
+      return;
+    }
+
+    // SMTP configurat → trimitem email de verificare (non-blocking)
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+    setImmediate(() => {
+      sendEmailVerificationEmail(user.email, `${firstName} ${lastName}`.trim(), verifyUrl).catch((err) =>
+        console.error('[EMAIL] Eroare trimitere verificare:', err)
+      );
+    });
+
     res.status(201).json({
-      message: 'Cont creat cu succes.',
-      token,
-      user: payload,
+      message: 'Cont creat. Verifică emailul pentru a activa contul.',
+      requiresEmailVerification: true,
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -210,6 +233,67 @@ export async function changePassword(req: Request, res: Response): Promise<void>
     res.json({ message: 'Parola a fost schimbată cu succes.' });
   } catch (error) {
     res.status(500).json({ error: 'Eroare la schimbarea parolei.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/auth/verify-email?token=xxx  — activare cont prin link din email
+// ─────────────────────────────────────────────────────────────────────────────
+export async function verifyEmail(req: Request, res: Response): Promise<void> {
+  try {
+    const { token } = req.query;
+    if (!token || typeof token !== 'string') {
+      res.status(400).json({ error: 'Token invalid.' });
+      return;
+    }
+
+    const result = await pool.query(
+      `SELECT id, email, first_name, last_name, role, email_verified
+       FROM users
+       WHERE email_verification_token = $1 AND is_active = false`,
+      [token]
+    );
+
+    if (!result.rows.length) {
+      res.status(400).json({ error: 'Token invalid sau contul este deja activat.' });
+      return;
+    }
+
+    const user = result.rows[0];
+
+    // Activăm contul
+    await pool.query(
+      `UPDATE users
+       SET is_active = true, email_verified = true, email_verification_token = NULL, updated_at = NOW()
+       WHERE id = $1`,
+      [user.id]
+    );
+
+    // Log audit
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [user.id, 'EMAIL_VERIFIED', 'user', user.id.toString(), req.ip]
+    );
+
+    // Returnăm token JWT — utilizatorul e logat automat după verificare
+    const payload: UserPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      firstName: user.first_name,
+      lastName: user.last_name,
+    };
+    const jwtToken = generateToken(payload);
+
+    res.json({
+      message: 'Adresa de email a fost confirmată. Contul tău este acum activ.',
+      token: jwtToken,
+      user: payload,
+    });
+  } catch (error) {
+    console.error('Verify email error:', error);
+    res.status(500).json({ error: 'Eroare la verificarea emailului.' });
   }
 }
 

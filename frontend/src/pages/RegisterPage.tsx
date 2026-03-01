@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FolderKanban } from 'lucide-react';
+import { FolderKanban, MailCheck } from 'lucide-react';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -15,14 +16,40 @@ export default function RegisterPage() {
     setError('');
     setIsLoading(true);
     try {
-      await register(form);
-      navigate('/');
+      const result = await register(form);
+      if ((result as any)?.requiresEmailVerification) {
+        setEmailSent(true);
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Eroare la înregistrare.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Ecran „verifică emailul" după înregistrare cu SMTP activ
+  if (emailSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-blue-100">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <MailCheck className="w-9 h-9 text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Verifică emailul</h1>
+          <p className="text-gray-500 text-sm leading-relaxed mb-6">
+            Am trimis un link de confirmare la <strong className="text-gray-700">{form.email}</strong>.
+            Apasă link-ul din email pentru a-ți activa contul.
+          </p>
+          <p className="text-xs text-gray-400 mb-6">Link-ul expiră în 24 de ore. Verifică și folderul Spam.</p>
+          <Link to="/login" className="text-primary-600 hover:underline text-sm font-medium">
+            ← Înapoi la autentificare
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-blue-100">

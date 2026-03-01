@@ -76,6 +76,7 @@ Asta pornește automat:
 
 ### Autentificare & Cont
 - Înregistrare și autentificare cu JWT
+- **Confirmare email la înregistrare** — dacă SMTP e configurat, contul este inactiv până la click pe link-ul trimis pe email (expiră în 24h); dacă SMTP nu e configurat, contul se activează automat (graceful degradation)
 - Pagina de profil (editare nume, schimbare parolă)
 - **Recuperare parolă** — flow complet cu token securizat (expiră în 1h); în development link-ul de resetare este returnat direct în răspunsul API
 
@@ -129,6 +130,7 @@ Asta pornește automat:
 
 ### Setări & Audit (Admin)
 - Setări generale organizație (nume firmă)
+- **Logo organizație** — upload imagine (PNG/JPG/SVG/WebP, max 2 MB), preview în timp real, stocat în baza de date; afișat în interfață
 - Jurnal de activitate paginat cu filtre pe acțiune și utilizator
 - Gestionare etichete globale (CRUD complet cu cascade delete)
 
@@ -139,6 +141,7 @@ Asta pornește automat:
 |--------|----------|-----------|
 | POST | `/api/auth/register` | Înregistrare cont |
 | POST | `/api/auth/login` | Autentificare |
+| GET | `/api/auth/verify-email` | Confirmare cont prin link email |
 | POST | `/api/auth/forgot-password` | Solicitare resetare parolă |
 | POST | `/api/auth/reset-password` | Resetare parolă cu token |
 | GET | `/api/auth/profile` | Profil utilizator 🔒 |
@@ -191,6 +194,8 @@ Asta pornește automat:
 |--------|----------|-----------|
 | GET | `/api/settings` | Setări sistem 🔒 |
 | PUT | `/api/settings` | Actualizare setări (Admin) 🔒 |
+| PUT | `/api/settings/logo` | Upload logo organizație (Admin) 🔒 |
+| DELETE | `/api/settings/logo` | Ștergere logo (Admin) 🔒 |
 | GET | `/api/settings/audit-logs` | Jurnal activitate (Admin) 🔒 |
 | GET | `/api/settings/audit-logs/actions` | Tipuri acțiuni audit (Admin) 🔒 |
 
