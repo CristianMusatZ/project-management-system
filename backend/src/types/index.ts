@@ -8,6 +8,8 @@ export interface UserPayload {
   role: UserRole;
   firstName: string;
   lastName: string;
+  /** Prezent doar în token-ul temporar MFA (înainte de verificarea codului OTP) */
+  mfaPending?: boolean;
 }
 
 export interface AuthRequest extends Request {

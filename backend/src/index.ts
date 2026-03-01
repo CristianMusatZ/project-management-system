@@ -19,6 +19,7 @@ import taskRoutes from './routes/task.routes';
 import notificationRoutes from './routes/notification.routes';
 import settingsRoutes from './routes/settings.routes';
 import labelRoutes from './routes/label.routes';
+import mfaRoutes from './routes/mfa.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -75,6 +76,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/labels', labelRoutes);
+app.use('/api/mfa', mfaRoutes);
 
 // Servire fișiere uploadate (atașamente la sarcini)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

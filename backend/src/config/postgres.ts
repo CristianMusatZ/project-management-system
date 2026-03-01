@@ -86,6 +86,10 @@ export async function connectPostgres(): Promise<void> {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
+      -- Coloane MFA (adăugate non-destructiv cu ALTER TABLE IF NOT EXISTS)
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
+
       -- Indexuri
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
