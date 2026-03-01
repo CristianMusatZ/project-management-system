@@ -90,6 +90,10 @@ export async function connectPostgres(): Promise<void> {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(64);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
 
+      -- Coloane verificare email (adăugate non-destructiv)
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255);
+
       -- Indexuri
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);

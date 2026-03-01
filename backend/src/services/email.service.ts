@@ -393,3 +393,43 @@ export async function sendGenericNotificationEmail(to: string, toName: string, t
     text: `${title}: ${message}`,
   });
 }
+
+/**
+ * Trimite email de confirmare cont după înregistrare.
+ */
+export async function sendEmailVerificationEmail(to: string, toName: string, verifyUrl: string): Promise<void> {
+  const html = baseTemplate('Confirmă adresa de email', `
+    <div style="width:48px;height:48px;background:#eff6ff;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:20px;">
+      <span style="font-size:24px;">✉️</span>
+    </div>
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Confirmare cont</h1>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+      Bine ai venit, <strong style="color:#111827;">${toName || to}</strong>!<br/>
+      Apasă butonul de mai jos pentru a-ți confirma adresa de email și a activa contul.
+    </p>
+    <a href="${verifyUrl}"
+       style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 28px;border-radius:8px;margin-bottom:24px;">
+      Confirmă adresa de email
+    </a>
+    <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;">
+      Link-ul expiră în <strong>24 de ore</strong>. Dacă nu ai creat un cont, ignoră acest email.
+    </p>
+    <p style="margin:8px 0 0;font-size:12px;color:#d1d5db;">
+      Sau copiază URL-ul: ${verifyUrl}
+    </p>
+  `);
+  await sendEmail({
+    to,
+    toName,
+    subject: '✉️ Confirmă adresa de email — PMS',
+    html,
+    text: `Confirmă adresa de email accesând: ${verifyUrl}\nLink-ul expiră în 24 de ore.`,
+  });
+}
+
+/**
+ * Returnează true dacă SMTP este configurat (util pentru a decide dacă se trimite email de verificare).
+ */
+export function isSmtpConfigured(): boolean {
+  return !!process.env.SMTP_HOST && !!process.env.SMTP_USER && !!process.env.SMTP_PASS;
+}

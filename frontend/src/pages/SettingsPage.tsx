@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
-import { Settings, Shield, Tag, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Search, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Settings, Shield, Tag, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Search, Plus, Pencil, Trash2, X, ImageUp } from 'lucide-react';
 
 interface AuditLog {
   id: number;
@@ -81,6 +81,13 @@ export default function SettingsPage() {
   const [orgNameSaving, setOrgNameSaving] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Logo
+  const [orgLogo, setOrgLogo] = useState<string>('');
+  const [logoPreview, setLogoPreview] = useState<string>('');
+  const [logoSaving, setLogoSaving] = useState(false);
+  const [logoMsg, setLogoMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   // Audit log
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 25, totalPages: 0 });
@@ -141,6 +148,9 @@ export default function SettingsPage() {
   useEffect(() => {
     api.get('/settings').then((res) => {
       setOrgName(res.data.settings?.org_name || '');
+      const logo = res.data.settings?.org_logo || '';
+      setOrgLogo(logo);
+      setLogoPreview(logo);
     }).catch(() => {});
 
     api.get('/settings/audit-logs/actions').then((res) => {
@@ -184,6 +194,54 @@ export default function SettingsPage() {
       setSettingsMsg({ type: 'error', text: err.response?.data?.error || 'Eroare la salvare.' });
     } finally {
       setOrgNameSaving(false);
+    }
+  }
+
+  function handleLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setLogoMsg({ type: 'error', text: 'Selectează o imagine (PNG, JPG, SVG, WebP).' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoMsg({ type: 'error', text: 'Imaginea este prea mare. Dimensiunea maximă este 2 MB.' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      setLogoPreview(base64);
+      setOrgLogo(base64);
+      setLogoMsg(null);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSaveLogo() {
+    if (!orgLogo) return;
+    setLogoSaving(true);
+    setLogoMsg(null);
+    try {
+      await api.put('/settings/logo', { logo: orgLogo });
+      setLogoMsg({ type: 'success', text: 'Logo salvat cu succes.' });
+    } catch (err: any) {
+      setLogoMsg({ type: 'error', text: err.response?.data?.error || 'Eroare la salvare.' });
+    } finally {
+      setLogoSaving(false);
+    }
+  }
+
+  async function handleDeleteLogo() {
+    if (!window.confirm('Ștergi logo-ul organizației?')) return;
+    try {
+      await api.delete('/settings/logo');
+      setOrgLogo('');
+      setLogoPreview('');
+      setLogoMsg({ type: 'success', text: 'Logo eliminat.' });
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    } catch (err: any) {
+      setLogoMsg({ type: 'error', text: err.response?.data?.error || 'Eroare.' });
     }
   }
 
@@ -270,6 +328,58 @@ export default function SettingsPage() {
                 {orgNameSaving ? 'Se salvează...' : 'Salvare'}
               </button>
             </form>
+          </div>
+
+          {/* Logo organizație */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mt-4">
+            <h2 className="font-semibold text-gray-900 mb-1">Logo organizație</h2>
+            <p className="text-xs text-gray-400 mb-5">PNG, JPG, SVG sau WebP — max 2 MB. Recomandat: 200×60 px.</p>
+
+            {logoMsg && (
+              <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${logoMsg.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                {logoMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                {logoMsg.text}
+              </div>
+            )}
+
+            {/* Preview */}
+            {logoPreview ? (
+              <div className="mb-4 flex items-center gap-4">
+                <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 inline-block">
+                  <img src={logoPreview} alt="Logo organizație" className="h-14 max-w-[200px] object-contain" />
+                </div>
+                <button
+                  onClick={handleDeleteLogo}
+                  className="flex items-center gap-1 text-sm text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="w-4 h-4" /> Elimină logo
+                </button>
+              </div>
+            ) : (
+              <div className="mb-4 border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
+                <ImageUp className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">Niciun logo setat</p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoFileChange}
+                className="block text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
+              />
+              {orgLogo && (
+                <button
+                  onClick={handleSaveLogo}
+                  disabled={logoSaving}
+                  className="px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition font-medium text-sm"
+                >
+                  {logoSaving ? 'Se salvează...' : 'Salvează logo'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
