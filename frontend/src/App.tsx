@@ -14,10 +14,20 @@ import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import Layout from './components/Layout';
+import PageTransition from './components/PageTransition';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
-  if (isLoading) return <div className="flex items-center justify-center h-screen">Se încarcă...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100/60">
+        <div className="flex flex-col items-center gap-3 animate-fade-in">
+          <div className="w-10 h-10 rounded-full border-4 border-primary-200 border-t-primary-600 animate-spin" />
+          <p className="text-sm text-gray-500 font-medium">Se încarcă...</p>
+        </div>
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -27,7 +37,6 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (user?.role !== 'admin') return <Navigate to="/" replace />;
   return <>{children}</>;
 }
-
 
 export default function App() {
   return (
@@ -42,16 +51,18 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Layout>
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/projects" element={<ProjectsPage />} />
-                <Route path="/projects/:id" element={<ProjectDetailPage />} />
-                <Route path="/tasks" element={<TasksPage />} />
-                <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
-                <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
-                <Route path="/profile" element={<ProfilePage />} />
-              </Routes>
+              <PageTransition>
+                <Routes>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/projects" element={<ProjectsPage />} />
+                  <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                  <Route path="/tasks" element={<TasksPage />} />
+                  <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+                  <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                </Routes>
+              </PageTransition>
             </Layout>
           </ProtectedRoute>
         }
