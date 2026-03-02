@@ -48,6 +48,11 @@ Aplicația este deployată pe [Railway](https://railway.app) și accesibilă pub
 ├── .github/workflows/ci-cd.yml   # Pipeline CI/CD
 ├── backend/
 │   ├── src/
+│   │   ├── __tests__/             # Suite de teste
+│   │   │   ├── helpers/           # testApp.ts, authHelper.ts
+│   │   │   ├── middleware/        # auth.test.ts, rbac.test.ts, errorHandler.test.ts
+│   │   │   ├── controllers/       # auth.controller.test.ts
+│   │   │   └── integration/       # auth.routes.test.ts, project.routes.test.ts, task.routes.test.ts
 │   │   ├── config/                # Conexiuni PostgreSQL & MongoDB
 │   │   ├── controllers/           # Logica endpoint-urilor
 │   │   ├── middleware/            # Auth JWT, RBAC, error handler
@@ -56,10 +61,14 @@ Aplicația este deployată pe [Railway](https://railway.app) și accesibilă pub
 │   │   ├── types/                 # TypeScript interfaces
 │   │   └── index.ts               # Entry point server
 │   ├── uploads/                   # Atașamente uploadate la sarcini
+│   ├── jest.config.js             # Configurare Jest (acoperă și testele frontend)
 │   ├── Dockerfile
 │   └── package.json
 ├── frontend/
 │   ├── src/
+│   │   ├── __tests__/             # Teste frontend (rulate prin Jest din backend)
+│   │   │   ├── utils/             # timeAgo.test.ts
+│   │   │   └── context/           # AuthContext.test.ts
 │   │   ├── components/            # Componente reutilizabile (Layout)
 │   │   ├── context/               # AuthContext (React Context)
 │   │   ├── pages/                 # Pagini aplicație
@@ -77,7 +86,7 @@ Aplicația este deployată pe [Railway](https://railway.app) și accesibilă pub
 ### Pasul 1: Clonare & configurare
 
 ```bash
-git clone https://github.com/UTILIZATORUL_TAU/project-management-system.git
+git clone https://github.com/CristianMusatZ/project-management-system.git
 cd project-management-system
 cp .env.example .env
 ```
@@ -316,6 +325,161 @@ Fără `SNYK_TOKEN`, job-ul Snyk folosește `continue-on-error: true` — nu blo
 - Rapoartele Snyk apar în dashboard-ul **snyk.io**
 - Rapoartele npm audit sunt salvate ca **GitHub Actions Artifacts** (retenție 90 zile)
 
+## 🧪 Testare
+
+### Stack de testare
+
+| Strat | Tool | Scop |
+|-------|------|------|
+| **Backend — unitar** | Jest 29 + ts-jest | Testare izolată a middleware-urilor și controller-elor, cu baza de date mockuită |
+| **Backend — integrare** | Supertest | Cereri HTTP reale trimise la aplicație, fără server pornit separat |
+| **Frontend** | Jest + ts-jest | Testare logică pură (localStorage, RBAC, utilități) prin același runner ca backend-ul |
+
+> **De ce nu Vitest pentru frontend?** `node_modules` sunt instalate pe macOS (darwin-arm64), iar VM-ul de CI rulează pe Linux (arm64). Binarele native ale rollup și esbuild sunt incompatibile între platforme, deci testele frontend sunt rulate prin runner-ul Jest al backend-ului, care nu depinde de aceste binare.
+
+---
+
+### Ce este acoperit
+
+#### Teste unitare middleware (`src/__tests__/middleware/`)
+
+**`auth.test.ts`** — 10 teste pentru `authenticate()` și `generateToken()`
+- Respinge cereri fără header `Authorization`
+- Respinge token-uri cu format greșit (fără prefix `Bearer`)
+- Respinge token-uri invalide sau semnate cu alt secret
+- Respinge token-uri expirate
+- Setează corect `req.user` pentru token-uri valide
+- Verifică durata de expirare: 24h pentru login normal, 5 minute pentru pasul MFA
+
+**`rbac.test.ts`** — 8 teste pentru `authorize()`
+- Returnează 401 dacă utilizatorul nu e autentificat
+- Returnează 403 dacă rolul nu se află în lista de roluri permise
+- Apelează `next()` când rolul este permis
+- Suportă liste cu roluri multiple
+
+**`errorHandler.test.ts`** — 5 teste pentru middleware-ul global de erori
+- `ValidationError` → 400
+- `UnauthorizedError` → 401
+- Erori generice → 500 cu mesaj detaliat în development
+- Erori generice → 500 cu mesaj generic în production
+
+#### Teste unitare controller (`src/__tests__/controllers/`)
+
+**`auth.controller.test.ts`** — 25+ teste cu PostgreSQL, bcrypt și email service mockuite
+- `register`: câmpuri lipsă, parolă prea scurtă, email deja existent, primul utilizator devine admin, al doilea devine member, flow cu confirmare email (SMTP activ vs. graceful degradation)
+- `login`: câmpuri lipsă, utilizator inexistent, parolă greșită, login reușit, flow MFA (răspuns cu `requiresMFA` + `tempToken`)
+- `getProfile`: utilizator găsit / negăsit
+- `changePassword`: parolă curentă greșită
+- `forgotPassword`: comportament anti-enumerare (răspuns identic indiferent dacă emailul există sau nu)
+- `resetPassword`: token invalid, token expirat, resetare reușită
+
+#### Teste de integrare HTTP (`src/__tests__/integration/`)
+
+Testele pornesc aplicația Express complet (fără server real), folosind `testApp.ts` — fără conexiuni reale la PostgreSQL sau MongoDB.
+
+**`auth.routes.test.ts`** — acoperă toate rutele `/api/auth/*`
+
+**`project.routes.test.ts`** — acoperă `/api/projects/*`
+- `GET /` — 401 fără token, admin vede toate proiectele, member/viewer vede doar proiectele din care face parte, filtrare pe status
+- `POST /` — 403 pentru member și viewer, 400 câmpuri lipsă, 201 creare reușită (admin și PM)
+- `GET /:id` — 404 inexistent, 403 member care nu e în proiect, 200 admin sau member din proiect
+- `PUT /:id` — 403 member, 404, 403 PM pe proiectul altcuiva, 200 admin
+- `DELETE /:id` — 403 member și PM pe proiect strain, 200 admin
+
+**`task.routes.test.ts`** — acoperă `/api/tasks/*`
+- `GET /all` — 401, admin vede tot, member vede doar sarcinile din proiectele lui
+- `GET /project/:id` — lista sarcini, filtrare pe status
+- `POST /` — 403 viewer, 403 member (nu e în proiect), 400 titlu lipsă, 201 creare reușită
+- `PUT /:id` — 403 viewer, 403 member pe sarcina altcuiva, 200 member pe propria sarcină, 200 admin
+- `DELETE /:id` — 403 member și viewer, 200 admin
+- `POST /:id/comments` — 403 viewer, 400 fără text, 404, 200 admin
+
+#### Teste frontend (`frontend/src/__tests__/`)
+
+**`utils/timeAgo.test.ts`** — 11 teste pentru funcția de formatare timp relativ
+- "acum" (sub 1 minut)
+- "acum X min" (între 1 și 59 minute)
+- "acum Xh" (între 1 și 23 ore)
+- "acum Xz" (peste 24 ore)
+
+**`context/AuthContext.test.ts`** — 18 teste pentru logica din AuthContext
+- Salvare token și user în localStorage la login
+- Ștergere la logout
+- Merge la `updateUser` (modificare parțială a profilului)
+- Restaurare sesiune la reîncărcarea paginii (token existent)
+- Comportament când localStorage e gol
+- Fluxul MFA: nu se salvează token final dacă API returnează `requiresMFA`
+- Fluxul de verificare email: nu se salvează token dacă `requiresEmailVerification`
+- Logica RBAC — `canExport`: admin ✅ / project_manager ✅ / viewer ✅ / member ❌
+- Vizibilitate nav items per rol
+
+---
+
+### Cum rulezi testele
+
+Toate testele (backend + frontend) se rulează dintr-o singură comandă din directorul `backend/`:
+
+```bash
+cd backend
+npm test
+```
+
+Rezultat așteptat:
+
+```
+Test Suites: 9 passed, 9 total
+Tests:       153 passed, 153 total
+```
+
+#### Rulare selectivă
+
+```bash
+# Doar testele de middleware
+npm test -- middleware
+
+# Doar testele de integrare
+npm test -- integration
+
+# Doar testele pentru un fișier specific
+npm test -- auth.routes
+
+# Watch mode (re-rulează automat la modificări)
+npm test -- --watch
+
+# Cu raport de acoperire (coverage)
+npm test -- --coverage
+```
+
+---
+
+### Când să rulezi testele
+
+| Situație | Acțiune recomandată |
+|----------|---------------------|
+| Înainte de orice commit | `npm test` — dacă vreun test pică, nu faci commit |
+| După modificarea unui controller | Rulezi testele unitare pentru controller-ul respectiv |
+| După modificarea unui middleware | Rulezi `npm test -- middleware` |
+| După modificarea logicii de autentificare | Rulezi `npm test -- auth` |
+| La deschiderea unui Pull Request | Pipeline-ul CI rulează automat toate testele |
+
+---
+
+### Interpretarea output-ului
+
+```
+PASS src/__tests__/middleware/auth.test.ts       ← suite a trecut
+FAIL src/__tests__/integration/auth.routes.test.ts  ← suite a picat
+
+● POST /api/auth/login › returnează 401 la parolă greșită
+
+  Expected: 401
+  Received: 200                                  ← valoarea primită vs. așteptată
+```
+
+**`console.error` în output** — nu indică o problemă. Testele care verifică gestionarea erorilor (ex. DB inaccesibil) declanșează intenționat ramura `catch` din controller, care loghează eroarea — exact cum ar face în producție. Testul verifică apoi că răspunsul HTTP este 500.
+
+---
+
 ## Comenzi utile
 
 ```bash
@@ -333,4 +497,7 @@ cd backend && npm install && npm run dev
 
 # Doar frontend (development fără Docker)
 cd frontend && npm install && npm run dev
+
+# Rulare teste
+cd backend && npm test
 ```

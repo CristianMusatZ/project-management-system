@@ -19,4 +19,11 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    // Folosim mediul 'node' deoarece @testing-library/react nu e instalat.
+    // Testele acoperă logică pură: utilitare, RBAC, localStorage, payload-uri.
+    environment: 'node',
+    globals: true,
+    include: ['src/__tests__/**/*.test.ts'],
+  },
 });
