@@ -224,10 +224,12 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((project) => (
+          {filtered.map((project, idx) => (
             <div
               key={project._id}
-              className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition relative"
+              className="bg-white rounded-2xl border border-gray-200/80 p-5 relative
+                         card-hover animate-slide-in-up"
+              style={{ animationDelay: `${idx * 60}ms` }}
             >
               {/* Menu button */}
               {canManage && (
@@ -239,7 +241,7 @@ export default function ProjectsPage() {
                     <MoreVertical className="w-4 h-4 text-gray-400" />
                   </button>
                   {openMenu === project._id && (
-                    <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-10 animate-slide-in-down overflow-hidden">
                       <button
                         onClick={() => openEditModal(project)}
                         className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -299,8 +301,8 @@ export default function ProjectsPage() {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg mx-4 p-6 animate-scale-in shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl font-bold text-gray-900">
                 {editingProject ? 'Editare proiect' : 'Proiect nou'}

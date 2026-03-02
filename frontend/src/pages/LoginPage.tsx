@@ -74,7 +74,7 @@ export default function LoginPage() {
   if (mfaPending) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-blue-100">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 animate-scale-in">
           <div className="flex flex-col items-center mb-8">
             <div className="w-14 h-14 bg-primary-50 rounded-2xl flex items-center justify-center mb-3">
               <ShieldCheck className="w-8 h-8 text-primary-600" />
@@ -130,12 +130,15 @@ export default function LoginPage() {
 
   // ── Render step 1 (email + parolă) ──────────────────────────────────────
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-blue-100">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-blue-100">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.15)] p-8 animate-scale-in">
         <div className="flex flex-col items-center mb-8">
-          <FolderKanban className="w-12 h-12 text-primary-600 mb-3" />
+          <div className="w-14 h-14 rounded-2xl bg-primary-600 flex items-center justify-center mb-4
+                          shadow-[0_4px_16px_rgba(79,70,229,0.4)]">
+            <FolderKanban className="w-7 h-7 text-white" />
+          </div>
           <h1 className="text-2xl font-bold text-gray-900">Project Management</h1>
-          <p className="text-gray-500 text-sm mt-1">Conectați-vă la contul dumneavoastră</p>
+          <p className="text-gray-400 text-sm mt-1">Conectați-vă la contul dumneavoastră</p>
         </div>
 
         {error && (

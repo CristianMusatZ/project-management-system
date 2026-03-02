@@ -540,8 +540,8 @@ export default function ProjectDetailPage() {
 
       {/* Task Create/Edit Modal */}
       {showTaskModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTaskModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowTaskModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg mx-4 p-6 animate-scale-in shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl font-bold text-gray-900">
                 {editingTask ? 'Editare sarcină' : 'Sarcină nouă'}
@@ -694,8 +694,8 @@ export default function ProjectDetailPage() {
 
       {/* Comment Modal */}
       {showCommentModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCommentModal(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowCommentModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6 animate-scale-in shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900">Comentarii — {showCommentModal.title}</h2>
               <button onClick={() => setShowCommentModal(null)} className="p-1 hover:bg-gray-100 rounded">
@@ -745,8 +745,8 @@ export default function ProjectDetailPage() {
 
       {/* Attachments Modal */}
       {showAttachmentsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAttachmentsModal(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowAttachmentsModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6 animate-scale-in shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900 truncate pr-2">
                 Atașamente — {showAttachmentsModal.title}
@@ -826,8 +826,8 @@ export default function ProjectDetailPage() {
 
       {/* Members Management Modal */}
       {showMembersModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowMembersModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={() => setShowMembersModal(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6 animate-scale-in shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl font-bold text-gray-900">Membri proiect</h2>
               <button onClick={() => setShowMembersModal(false)} className="p-1 hover:bg-gray-100 rounded">
