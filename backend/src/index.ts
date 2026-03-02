@@ -25,6 +25,10 @@ import { errorHandler } from './middleware/errorHandler';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Trust Railway / reverse-proxy headers (X-Forwarded-For)
+// Required for express-rate-limit to identify IPs correctly in production
+app.set('trust proxy', 1);
+
 // ============================
 // Security Middleware
 // ============================
