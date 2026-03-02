@@ -144,3 +144,33 @@ export async function markAllAsRead(req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({ error: 'Eroare.' });
   }
 }
+
+// -------------------------------------------------------
+// DELETE /api/notifications/:id  — șterge o notificare
+// -------------------------------------------------------
+export async function deleteNotification(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    await pool.query(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user!.id]
+    );
+    res.json({ message: 'Notificare ștearsă.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare.' });
+  }
+}
+
+// -------------------------------------------------------
+// DELETE /api/notifications  — șterge toate notificările citite
+// -------------------------------------------------------
+export async function deleteAllRead(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    await pool.query(
+      `DELETE FROM notifications WHERE user_id = $1 AND is_read = true`,
+      [req.user!.id]
+    );
+    res.json({ message: 'Notificările citite au fost șterse.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Eroare.' });
+  }
+}

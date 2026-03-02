@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, FolderKanban, ListTodo, BarChart3, Users,
   LogOut, UserCircle, Bell, Settings, CheckCheck, Clock,
-  MessageSquare, UserCheck,
+  MessageSquare, UserCheck, X, Trash2,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -110,6 +110,18 @@ export default function Layout({ children }: { children: ReactNode }) {
     if (notif.entity_type === 'task') navigate('/tasks');
   }
 
+  async function handleDismissNotif(e: React.MouseEvent, notifId: number, wasRead: boolean) {
+    e.stopPropagation();
+    await api.delete(`/notifications/${notifId}`);
+    setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+    if (!wasRead) setUnreadCount((c) => Math.max(0, c - 1));
+  }
+
+  async function handleClearRead() {
+    await api.delete('/notifications/read-all');
+    setNotifications((prev) => prev.filter((n) => !n.is_read));
+  }
+
   return (
     <div className="min-h-screen bg-gray-100/60">
       {/* ── Floating Sidebar ─────────────────────────────────────────────────── */}
@@ -203,16 +215,36 @@ export default function Layout({ children }: { children: ReactNode }) {
                     </span>
                   )}
                 </span>
-                {unreadCount > 0 && (
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800
+                                 transition-colors btn-press"
+                      title="Marchează toate ca citite"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      Marchează toate
+                    </button>
+                  )}
+                  {notifications.some((n) => n.is_read) && (
+                    <button
+                      onClick={handleClearRead}
+                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500
+                                 transition-colors btn-press"
+                      title="Șterge notificările citite"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
-                    onClick={handleMarkAllRead}
-                    className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800
-                               transition-colors btn-press"
+                    onClick={() => setShowNotif(false)}
+                    className="text-gray-400 hover:text-gray-700 transition-colors btn-press p-0.5 rounded"
+                    title="Închide"
                   >
-                    <CheckCheck className="w-3.5 h-3.5" />
-                    Marchează toate
+                    <X className="w-4 h-4" />
                   </button>
-                )}
+                </div>
               </div>
 
               <div className="max-h-80 overflow-y-auto">
@@ -224,30 +256,43 @@ export default function Layout({ children }: { children: ReactNode }) {
                 ) : (
                   <div className="stagger-children">
                     {notifications.map((n, idx) => (
-                      <button
+                      <div
                         key={n.id}
-                        onClick={() => handleNotifClick(n)}
-                        className={`w-full text-left flex items-start gap-3 px-4 py-3
-                                    hover:bg-gray-50/80 transition-all duration-150
+                        className={`relative group flex items-start gap-3 px-4 py-3
                                     border-b border-gray-50 last:border-0
                                     animate-slide-in-up
                                     ${!n.is_read ? 'bg-blue-50/50' : ''}`}
                         style={{ animationDelay: `${idx * 40}ms` }}
                       >
-                        <div className="mt-0.5 flex-shrink-0">
-                          {notifIcon[n.type] || <Bell className="w-4 h-4 text-gray-400" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
-                            {n.title}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
-                          <p className="text-[11px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
-                        </div>
+                        <button
+                          onClick={() => handleNotifClick(n)}
+                          className="flex items-start gap-3 flex-1 min-w-0 text-left
+                                     hover:bg-transparent transition-all duration-150"
+                        >
+                          <div className="mt-0.5 flex-shrink-0">
+                            {notifIcon[n.type] || <Bell className="w-4 h-4 text-gray-400" />}
+                          </div>
+                          <div className="flex-1 min-w-0 pr-6">
+                            <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
+                              {n.title}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
+                            <p className="text-[11px] text-gray-400 mt-1">{timeAgo(n.created_at)}</p>
+                          </div>
+                        </button>
                         {!n.is_read && (
-                          <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2 animate-pulse" />
+                          <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2 animate-pulse absolute right-4 top-4 group-hover:hidden" />
                         )}
-                      </button>
+                        <button
+                          onClick={(e) => handleDismissNotif(e, n.id, n.is_read)}
+                          className="absolute right-3 top-3 p-0.5 rounded text-gray-300
+                                     hover:text-red-400 hover:bg-red-50 transition-all duration-150
+                                     opacity-0 group-hover:opacity-100"
+                          title="Șterge notificarea"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
