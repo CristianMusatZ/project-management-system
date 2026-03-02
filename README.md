@@ -130,7 +130,8 @@ Asta pornește automat:
 - Clopoțel în sidebar cu badge număr necitite
 - Dropdown cu ultimele 30 de notificări, polling la 30 secunde
 - Marcare citite individual sau toate odată
-- **Email notifications** — la fiecare notificare se trimite și un email HTML (template dedicat per tip: asignare, status, comentariu); SMTP configurat prin variabile de mediu; graceful degradation — dacă SMTP nu e configurat, notificările in-app funcționează normal
+- **Email notifications** — la fiecare notificare se trimite și un email HTML (template dedicat per tip: asignare, status, comentariu); trimitere prin **Brevo API** (serviciu tranzacțional); graceful degradation — dacă `BREVO_API_KEY` nu e configurat, notificările in-app funcționează normal
+  > ⚠️ **Notă:** Emailurile pot ajunge în folderul **Spam / Junk** dacă nu este configurat un domeniu custom verificat. Verificați spam dacă nu găsiți emailul în inbox.
 
 ### Rapoarte
 - Export PDF și Excel
@@ -276,20 +277,22 @@ Asta pornește automat:
 - `tasks` — sarcini cu comentarii, atașamente (subdocumente) și etichete asociate
 - `labels` — etichete globale (nume, culoare hex, creat de)
 
-### SMTP (Email Notifications)
-Setările SMTP se configurează prin variabile de mediu (opțional). Dacă nu sunt setate, emailurile sunt dezactivate fără erori:
+### Brevo (Email Notifications)
+Emailurile tranzacționale sunt trimise prin [Brevo](https://brevo.com) (ex-Sendinblue) via REST API. Dacă variabilele nu sunt setate, emailurile sunt dezactivate fără erori (graceful degradation).
 
 | Variabilă | Descriere | Exemplu |
 |-----------|-----------|---------|
-| `SMTP_HOST` | Server SMTP | `smtp.gmail.com` |
-| `SMTP_PORT` | Port SMTP | `587` |
-| `SMTP_SECURE` | TLS direct (port 465) | `false` |
-| `SMTP_USER` | Username / adresă email | `user@gmail.com` |
-| `SMTP_PASS` | Parolă sau App Password | `****` |
-| `SMTP_FROM` | Adresă expeditor | `noreply@firma.ro` |
-| `SMTP_FROM_NAME` | Nume expeditor | `Project Management System` |
+| `BREVO_API_KEY` | API Key din dashboard Brevo | `xkeysib-...` |
+| `BREVO_FROM` | Adresă expeditor verificată în Brevo | `noreply@firma.ro` |
+| `BREVO_FROM_NAME` | Nume expeditor (opțional) | `Project Management System` |
 
-**Provideri suportați:** Gmail (port 587 STARTTLS), Office 365, Outlook, SendGrid (SMTP relay). Implementare nativă Node.js — fără dependențe externe (`net` + `tls` built-in).
+**Setup:**
+1. Creează cont gratuit pe [brevo.com](https://brevo.com) (300 emailuri/zi gratuit)
+2. Verifică adresa de expeditor: **Settings → Senders & IP → Add a Sender**
+3. Generează API key: **Settings → API Keys**
+4. Adaugă variabilele în Railway Dashboard → serviciul backend → Variables
+
+> ⚠️ **Notă:** Fără un domeniu custom verificat, emailurile pot ajunge în folderul **Spam / Junk**. Verificați spam dacă nu găsiți emailul în inbox.
 
 ## 🔒 Securitate
 
