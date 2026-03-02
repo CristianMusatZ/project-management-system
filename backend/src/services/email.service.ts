@@ -1,19 +1,7 @@
-import net from 'net';
-import tls from 'tls';
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Config
+// Resend email service
+// Docs: https://resend.com/docs/api-reference/emails/send-email
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface SMTPConfig {
-  host: string;
-  port: number;
-  secure: boolean;    // true → SSL/TLS direct (port 465) | false → STARTTLS (port 587)
-  user: string;
-  pass: string;
-  from: string;
-  fromName: string;
-}
 
 export interface MailOptions {
   to: string;
@@ -23,179 +11,42 @@ export interface MailOptions {
   text?: string;
 }
 
-function getConfig(): SMTPConfig | null {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return null;
-  return {
-    host,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    user,
-    pass,
-    from: process.env.SMTP_FROM || user,
-    fromName: process.env.SMTP_FROM_NAME || 'Project Management System',
-  };
+function getResendKey(): string | null {
+  return process.env.RESEND_API_KEY || null;
+}
+
+function getFromAddress(): string {
+  const name = process.env.RESEND_FROM_NAME || 'Project Management System';
+  const addr = process.env.RESEND_FROM || 'onboarding@resend.dev';
+  return `${name} <${addr}>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Low-level SMTP protocol helpers (Node.js net + tls built-ins, no libraries)
+// Core send via Resend REST API
 // ─────────────────────────────────────────────────────────────────────────────
 
-type RawSocket = net.Socket | tls.TLSSocket;
+async function sendViaResend(apiKey: string, options: MailOptions): Promise<void> {
+  const toHeader = options.toName ? `${options.toName} <${options.to}>` : options.to;
 
-/**
- * Waits for a complete SMTP response (handles multi-line replies like EHLO).
- * Resolves when it sees a final line "CODE<space>text" with the expected code.
- */
-function awaitCode(socket: RawSocket, expectedCode: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let buf = '';
-
-    function onData(chunk: Buffer | string) {
-      buf += chunk.toString();
-      // Process line by line
-      let nlIdx: number;
-      while ((nlIdx = buf.indexOf('\n')) !== -1) {
-        const line = buf.slice(0, nlIdx).replace(/\r$/, '');
-        buf = buf.slice(nlIdx + 1);
-        if (line.length < 3) continue;
-        const code = parseInt(line.slice(0, 3), 10);
-        // Final line: "250 OK" (space after code) or exactly 3 chars
-        const isFinal = line.length === 3 || line[3] === ' ';
-        if (isFinal) {
-          socket.removeListener('data', onData);
-          socket.removeListener('error', onError);
-          if (code === expectedCode) resolve(line);
-          else reject(new Error(`SMTP ${code}: ${line.slice(4).trim()}`));
-          return;
-        }
-      }
-    }
-
-    function onError(e: Error) {
-      socket.removeListener('data', onData);
-      reject(e);
-    }
-
-    socket.on('data', onData);
-    socket.once('error', onError);
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: getFromAddress(),
+      to: [toHeader],
+      subject: options.subject,
+      html: options.html,
+      text: options.text || options.html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(),
+    }),
   });
-}
 
-/** Send an SMTP command string and wait for the expected response code. */
-function smtpCmd(socket: RawSocket, command: string, expectedCode: number): Promise<string> {
-  const p = awaitCode(socket, expectedCode);
-  socket.write(command + '\r\n');
-  return p;
-}
-
-/** Open a plain TCP connection to the SMTP server. */
-function openTCP(host: string, port: number): Promise<net.Socket> {
-  return new Promise((resolve, reject) => {
-    const s = net.createConnection(port, host);
-    s.once('connect', () => resolve(s));
-    s.once('error', reject);
-  });
-}
-
-/** Upgrade an existing plain socket to TLS (STARTTLS flow). */
-function upgradeToTLS(plain: net.Socket, host: string): Promise<tls.TLSSocket> {
-  return new Promise((resolve, reject) => {
-    const tlsSock = tls.connect({ socket: plain, host, rejectUnauthorized: false });
-    tlsSock.once('secureConnect', () => resolve(tlsSock));
-    tlsSock.once('error', reject);
-  });
-}
-
-/** Open a direct TLS connection (port 465 / SMTPS). */
-function openTLS(host: string, port: number): Promise<tls.TLSSocket> {
-  return new Promise((resolve, reject) => {
-    const s = tls.connect({ host, port, rejectUnauthorized: false });
-    s.once('secureConnect', () => resolve(s));
-    s.once('error', reject);
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RFC 2822 message builder (multipart/alternative: text + HTML)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildMessage(config: SMTPConfig, options: MailOptions): string {
-  const boundary = `pms-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const msgId = `<${Date.now()}.${Math.random().toString(36).slice(2)}@pms-app>`;
-  const textBody = options.text || options.html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-  const fromHeader = `"${config.fromName}" <${config.from}>`;
-  const toHeader = options.toName ? `"${options.toName}" <${options.to}>` : options.to;
-
-  const parts = [
-    `Date: ${new Date().toUTCString()}`,
-    `From: ${fromHeader}`,
-    `To: ${toHeader}`,
-    `Subject: ${options.subject}`,
-    `Message-ID: ${msgId}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/plain; charset=UTF-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    ``,
-    textBody,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/html; charset=UTF-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    ``,
-    options.html,
-    ``,
-    `--${boundary}--`,
-  ];
-
-  // Dot-stuffing: SMTP requires lines starting with '.' to be doubled
-  return parts.map(l => (l === '.') ? '..' : l).join('\r\n');
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Core SMTP send
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function sendViaSMTP(config: SMTPConfig, options: MailOptions): Promise<void> {
-  let socket: RawSocket;
-
-  if (config.secure) {
-    // Direct TLS (SMTPS, port 465)
-    socket = await openTLS(config.host, config.port);
-    await awaitCode(socket, 220);             // Server greeting
-  } else {
-    // Plain → STARTTLS (port 587)
-    const plain = await openTCP(config.host, config.port);
-    await awaitCode(plain, 220);              // Server greeting
-    await smtpCmd(plain, 'EHLO pms-app', 250);
-    await smtpCmd(plain, 'STARTTLS', 220);
-    socket = await upgradeToTLS(plain, config.host);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Resend API ${res.status}: ${body}`);
   }
-
-  // After TLS negotiation, (re-)identify ourselves
-  await smtpCmd(socket, 'EHLO pms-app', 250);
-
-  // AUTH LOGIN
-  await smtpCmd(socket, 'AUTH LOGIN', 334);
-  await smtpCmd(socket, Buffer.from(config.user).toString('base64'), 334);
-  await smtpCmd(socket, Buffer.from(config.pass).toString('base64'), 235);
-
-  // Envelope
-  await smtpCmd(socket, `MAIL FROM:<${config.from}>`, 250);
-  await smtpCmd(socket, `RCPT TO:<${options.to}>`, 250);
-
-  // Body
-  await smtpCmd(socket, 'DATA', 354);
-  const message = buildMessage(config, options);
-  await smtpCmd(socket, message + '\r\n.', 250);  // CRLF.CRLF = end of data
-
-  socket.write('QUIT\r\n');
-  socket.destroy();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,81 +173,57 @@ function genericTemplate(title: string, message: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function sendEmail(options: MailOptions): Promise<void> {
-  const config = getConfig();
-  if (!config) {
-    console.log(`[EMAIL] SMTP neconfigurat — ar fi trimis la: ${options.to} | Subiect: ${options.subject}`);
+  const apiKey = getResendKey();
+  if (!apiKey) {
+    console.log(`[EMAIL] RESEND_API_KEY neconfigurat — ar fi trimis la: ${options.to} | Subiect: ${options.subject}`);
     return;
   }
   try {
-    await sendViaSMTP(config, options);
+    await sendViaResend(apiKey, options);
     console.log(`[EMAIL] Trimis cu succes → ${options.to}: ${options.subject}`);
   } catch (err) {
-    // Email-ul este non-critic — logăm eroarea fără a bloca operațiunea principală
     console.error('[EMAIL] Eroare la trimitere:', err instanceof Error ? err.message : err);
   }
 }
 
-/**
- * Trimite email pentru notificarea de tip "task_assigned".
- */
 export async function sendTaskAssignedEmail(to: string, toName: string, taskTitle: string, projectName?: string): Promise<void> {
   await sendEmail({
-    to,
-    toName,
+    to, toName,
     subject: `📋 Sarcină nouă: ${taskTitle}`,
     html: taskAssignedTemplate(taskTitle, projectName),
     text: `Ai o sarcină nouă asignată: "${taskTitle}"${projectName ? ` în proiectul "${projectName}"` : ''}.`,
   });
 }
 
-/**
- * Trimite email pentru notificarea de tip "task_status_changed".
- */
 export async function sendStatusChangedEmail(to: string, toName: string, taskTitle: string, newStatus: string): Promise<void> {
   await sendEmail({
-    to,
-    toName,
+    to, toName,
     subject: `🔄 Status actualizat: ${taskTitle}`,
     html: statusChangedTemplate(taskTitle, newStatus),
     text: `Sarcina "${taskTitle}" a fost mutată în: ${newStatus.replace('_', ' ')}.`,
   });
 }
 
-/**
- * Trimite email pentru notificarea de tip "comment_added".
- */
 export async function sendCommentAddedEmail(
-  to: string,
-  toName: string,
-  taskTitle: string,
-  authorName: string,
-  commentPreview: string
+  to: string, toName: string, taskTitle: string, authorName: string, commentPreview: string
 ): Promise<void> {
   await sendEmail({
-    to,
-    toName,
+    to, toName,
     subject: `💬 Comentariu nou pe: ${taskTitle}`,
     html: commentAddedTemplate(taskTitle, authorName, commentPreview),
     text: `${authorName} a comentat pe sarcina "${taskTitle}": ${commentPreview}`,
   });
 }
 
-/**
- * Trimite email generic (pentru extensibilitate ulterioară).
- */
 export async function sendGenericNotificationEmail(to: string, toName: string, title: string, message: string): Promise<void> {
   await sendEmail({
-    to,
-    toName,
+    to, toName,
     subject: `🔔 ${title}`,
     html: genericTemplate(title, message),
     text: `${title}: ${message}`,
   });
 }
 
-/**
- * Trimite email de confirmare cont după înregistrare.
- */
 export async function sendEmailVerificationEmail(to: string, toName: string, verifyUrl: string): Promise<void> {
   const html = baseTemplate('Confirmă adresa de email', `
     <div style="width:48px;height:48px;background:#eff6ff;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:20px;">
@@ -419,8 +246,7 @@ export async function sendEmailVerificationEmail(to: string, toName: string, ver
     </p>
   `);
   await sendEmail({
-    to,
-    toName,
+    to, toName,
     subject: '✉️ Confirmă adresa de email — PMS',
     html,
     text: `Confirmă adresa de email accesând: ${verifyUrl}\nLink-ul expiră în 24 de ore.`,
@@ -428,8 +254,8 @@ export async function sendEmailVerificationEmail(to: string, toName: string, ver
 }
 
 /**
- * Returnează true dacă SMTP este configurat (util pentru a decide dacă se trimite email de verificare).
+ * Returnează true dacă Resend este configurat.
  */
 export function isSmtpConfigured(): boolean {
-  return !!process.env.SMTP_HOST && !!process.env.SMTP_USER && !!process.env.SMTP_PASS;
+  return !!process.env.RESEND_API_KEY;
 }
