@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Resend email service
-// Docs: https://resend.com/docs/api-reference/emails/send-email
+// Brevo (ex-Sendinblue) email service
+// Docs: https://developers.brevo.com/reference/sendtransacemail
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface MailOptions {
@@ -11,41 +11,40 @@ export interface MailOptions {
   text?: string;
 }
 
-function getResendKey(): string | null {
-  return process.env.RESEND_API_KEY || null;
+function getBrevoKey(): string | null {
+  return process.env.BREVO_API_KEY || null;
 }
 
-function getFromAddress(): string {
-  const name = process.env.RESEND_FROM_NAME || 'Project Management System';
-  const addr = process.env.RESEND_FROM || 'onboarding@resend.dev';
-  return `${name} <${addr}>`;
+function getSender() {
+  return {
+    name: process.env.BREVO_FROM_NAME || 'Project Management System',
+    email: process.env.BREVO_FROM || 'dl.cristianmusat@gmail.com',
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Core send via Resend REST API
+// Core send via Brevo REST API
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function sendViaResend(apiKey: string, options: MailOptions): Promise<void> {
-  const toHeader = options.toName ? `${options.toName} <${options.to}>` : options.to;
-
-  const res = await fetch('https://api.resend.com/emails', {
+async function sendViaBrevo(apiKey: string, options: MailOptions): Promise<void> {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'api-key': apiKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: getFromAddress(),
-      to: [toHeader],
+      sender: getSender(),
+      to: [{ email: options.to, name: options.toName || options.to }],
       subject: options.subject,
-      html: options.html,
-      text: options.text || options.html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(),
+      htmlContent: options.html,
+      textContent: options.text || options.html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(),
     }),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Resend API ${res.status}: ${body}`);
+    throw new Error(`Brevo API ${res.status}: ${body}`);
   }
 }
 
@@ -173,13 +172,13 @@ function genericTemplate(title: string, message: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function sendEmail(options: MailOptions): Promise<void> {
-  const apiKey = getResendKey();
+  const apiKey = getBrevoKey();
   if (!apiKey) {
-    console.log(`[EMAIL] RESEND_API_KEY neconfigurat — ar fi trimis la: ${options.to} | Subiect: ${options.subject}`);
+    console.log(`[EMAIL] BREVO_API_KEY neconfigurat — ar fi trimis la: ${options.to} | Subiect: ${options.subject}`);
     return;
   }
   try {
-    await sendViaResend(apiKey, options);
+    await sendViaBrevo(apiKey, options);
     console.log(`[EMAIL] Trimis cu succes → ${options.to}: ${options.subject}`);
   } catch (err) {
     console.error('[EMAIL] Eroare la trimitere:', err instanceof Error ? err.message : err);
@@ -254,8 +253,8 @@ export async function sendEmailVerificationEmail(to: string, toName: string, ver
 }
 
 /**
- * Returnează true dacă Resend este configurat.
+ * Returnează true dacă Brevo este configurat.
  */
 export function isSmtpConfigured(): boolean {
-  return !!process.env.RESEND_API_KEY;
+  return !!process.env.BREVO_API_KEY;
 }
