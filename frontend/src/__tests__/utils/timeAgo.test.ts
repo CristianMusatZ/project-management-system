@@ -1,6 +1,7 @@
 /**
  * Teste unitare — funcția timeAgo() din Layout.tsx
- * Extragem logica pură pentru testare (fără DOM, compatibil Jest + ts-jest).
+ * Extragem logica pură pentru testare (fără DOM).
+ * Rulează prin Vitest (CI) sau prin backend Jest (local macOS arm64).
  */
 
 // Funcția extrasă din Layout.tsx — identică cu originalul
@@ -16,11 +17,12 @@ function timeAgo(dateStr: string): string {
 
 describe('timeAgo()', () => {
   let fakeNow: number;
-  let dateSpy: jest.SpyInstance;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let dateSpy: any;
 
   beforeEach(() => {
     fakeNow = new Date('2024-06-15T12:00:00Z').getTime();
-    dateSpy = jest.spyOn(Date, 'now').mockReturnValue(fakeNow);
+    dateSpy = vi.spyOn(Date, 'now').mockReturnValue(fakeNow);
   });
 
   afterEach(() => {

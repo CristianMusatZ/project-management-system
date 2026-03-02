@@ -61,12 +61,12 @@ Aplicația este deployată pe [Railway](https://railway.app) și accesibilă pub
 │   │   ├── types/                 # TypeScript interfaces
 │   │   └── index.ts               # Entry point server
 │   ├── uploads/                   # Atașamente uploadate la sarcini
-│   ├── jest.config.js             # Configurare Jest (acoperă și testele frontend)
+│   ├── jest.config.js             # Configurare Jest (doar backend)
 │   ├── Dockerfile
 │   └── package.json
 ├── frontend/
 │   ├── src/
-│   │   ├── __tests__/             # Teste frontend (rulate prin Jest din backend)
+│   │   ├── __tests__/             # Teste frontend (rulate prin Vitest)
 │   │   │   ├── utils/             # timeAgo.test.ts
 │   │   │   └── context/           # AuthContext.test.ts
 │   │   ├── components/            # Componente reutilizabile (Layout)
@@ -333,9 +333,7 @@ Fără `SNYK_TOKEN`, job-ul Snyk folosește `continue-on-error: true` — nu blo
 |-------|------|------|
 | **Backend — unitar** | Jest 29 + ts-jest | Testare izolată a middleware-urilor și controller-elor, cu baza de date mockuită |
 | **Backend — integrare** | Supertest | Cereri HTTP reale trimise la aplicație, fără server pornit separat |
-| **Frontend** | Jest + ts-jest | Testare logică pură (localStorage, RBAC, utilități) prin același runner ca backend-ul |
-
-> **De ce nu Vitest pentru frontend?** `node_modules` sunt instalate pe macOS (darwin-arm64), iar VM-ul de CI rulează pe Linux (arm64). Binarele native ale rollup și esbuild sunt incompatibile între platforme, deci testele frontend sunt rulate prin runner-ul Jest al backend-ului, care nu depinde de aceste binare.
+| **Frontend** | Vitest 2 | Testare logică pură (localStorage, RBAC, utilități) cu `globals: true` |
 
 ---
 
@@ -417,7 +415,7 @@ Testele pornesc aplicația Express complet (fără server real), folosind `testA
 
 ### Cum rulezi testele
 
-Toate testele (backend + frontend) se rulează dintr-o singură comandă din directorul `backend/`:
+**Backend** (Jest + ts-jest + Supertest):
 
 ```bash
 cd backend
@@ -427,11 +425,25 @@ npm test
 Rezultat așteptat:
 
 ```
-Test Suites: 9 passed, 9 total
-Tests:       153 passed, 153 total
+Test Suites: 7 passed, 7 total
+Tests:       124 passed, 124 total
 ```
 
-#### Rulare selectivă
+**Frontend** (Vitest):
+
+```bash
+cd frontend
+npm test
+```
+
+Rezultat așteptat:
+
+```
+Test Files  2 passed (2)
+Tests       29 passed (29)
+```
+
+#### Rulare selectivă (backend)
 
 ```bash
 # Doar testele de middleware

@@ -1,20 +1,20 @@
 /**
  * Teste unitare — logica din AuthContext
- * Compatibil Jest + ts-jest (fără import din 'vitest').
+ * Runner: Vitest (globals: true → vi disponibil global, fără import explicit).
  * Testăm comportamentul funcțiilor login, register, logout, updateUser,
  * logica RBAC și persistența în localStorage, fără a randa componente React.
  */
 
 // ─── Mock localStorage ─────────────────────────────────────────────────────────
 // store expus la nivel de modul, astfel încât beforeEach să poată restaura
-// implementările după jest.resetAllMocks()
+// implementările după vi.resetAllMocks()
 let store: Record<string, string> = {};
 
 const localStorageMock = {
-  getItem: jest.fn((key: string) => store[key] ?? null),
-  setItem: jest.fn((key: string, value: string) => { store[key] = value; }),
-  removeItem: jest.fn((key: string) => { delete store[key]; }),
-  clear: jest.fn(() => { store = {}; }),
+  getItem: vi.fn((key: string) => store[key] ?? null),
+  setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+  removeItem: vi.fn((key: string) => { delete store[key]; }),
+  clear: vi.fn(() => { store = {}; }),
 };
 
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
@@ -34,7 +34,7 @@ function restoreMockImpls() {
 describe('AuthContext — logica localStorage', () => {
   beforeEach(() => {
     store = {};
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     restoreMockImpls();
   });
 
@@ -109,7 +109,7 @@ describe('AuthContext — logica localStorage', () => {
 describe('AuthContext — comportament răspuns API', () => {
   beforeEach(() => {
     store = {};
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     restoreMockImpls();
   });
 
