@@ -14,7 +14,7 @@ import {
 async function getUserEmailAndName(userId: number): Promise<{ email: string; name: string } | null> {
   try {
     const result = await pool.query(
-      `SELECT email, name FROM users WHERE id = $1 AND is_active = true`,
+      `SELECT email, first_name || ' ' || last_name AS name FROM users WHERE id = $1 AND is_active = true`,
       [userId]
     );
     if (result.rows.length === 0) return null;
