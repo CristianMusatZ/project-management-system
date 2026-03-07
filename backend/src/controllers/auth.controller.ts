@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import pool from '../config/postgres';
 import { generateToken } from '../middleware/auth';
 import { UserPayload } from '../types';
-import { sendEmailVerificationEmail, isSmtpConfigured } from '../services/email.service';
+import { sendEmailVerificationEmail, sendPasswordResetEmail, isSmtpConfigured } from '../services/email.service';
 
 export async function register(req: Request, res: Response): Promise<void> {
   try {
@@ -342,8 +342,10 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
 
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
 
-    // În producție, se trimite email. Deocamdată logăm și returnăm link-ul în dev.
     console.log(`\n🔑 Link resetare parolă pentru ${email}:\n${resetUrl}\n`);
+
+    // Trimitere email cu link de resetare
+    await sendPasswordResetEmail(email.toLowerCase(), user.first_name, resetUrl);
 
     res.json({
       message: 'Dacă adresa există, vei primi instrucțiuni de resetare.',

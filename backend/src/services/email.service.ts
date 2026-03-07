@@ -223,6 +223,35 @@ export async function sendGenericNotificationEmail(to: string, toName: string, t
   });
 }
 
+export async function sendPasswordResetEmail(to: string, toName: string, resetUrl: string): Promise<void> {
+  const html = baseTemplate('Resetare parolă', `
+    <div style="width:48px;height:48px;background:#fef3c7;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:20px;">
+      <span style="font-size:24px;">🔑</span>
+    </div>
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;">Resetare parolă</h1>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+      Salut, <strong style="color:#111827;">${toName || to}</strong>!<br/>
+      Am primit o cerere de resetare a parolei pentru contul tău. Apasă butonul de mai jos pentru a alege o parolă nouă.
+    </p>
+    <a href="${resetUrl}"
+       style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 28px;border-radius:8px;margin-bottom:24px;">
+      Resetează parola
+    </a>
+    <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;">
+      Link-ul expiră în <strong>1 oră</strong>. Dacă nu ai solicitat resetarea parolei, ignoră acest email — contul tău este în siguranță.
+    </p>
+    <p style="margin:8px 0 0;font-size:12px;color:#d1d5db;">
+      Sau copiază URL-ul: ${resetUrl}
+    </p>
+  `);
+  await sendEmail({
+    to, toName,
+    subject: '🔑 Resetare parolă — PMS',
+    html,
+    text: `Resetează parola accesând: ${resetUrl}\nLink-ul expiră în 1 oră. Dacă nu ai solicitat resetarea, ignoră acest email.`,
+  });
+}
+
 export async function sendEmailVerificationEmail(to: string, toName: string, verifyUrl: string): Promise<void> {
   const html = baseTemplate('Confirmă adresa de email', `
     <div style="width:48px;height:48px;background:#eff6ff;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:20px;">
