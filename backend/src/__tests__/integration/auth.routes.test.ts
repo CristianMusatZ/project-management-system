@@ -15,6 +15,7 @@ jest.mock('../../config/mongo', () => ({
 jest.mock('../../services/email.service', () => ({
   isSmtpConfigured: jest.fn().mockReturnValue(false),
   sendEmailVerificationEmail: jest.fn().mockResolvedValue(undefined),
+  sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('bcryptjs', () => ({
