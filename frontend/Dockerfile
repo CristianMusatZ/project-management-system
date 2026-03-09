@@ -1,5 +1,7 @@
 # ---- Base ----
 FROM node:20-alpine AS base
+# Upgrade zlib to fix CVE: Out-of-bounds Write + Improper Validation (zlib < 1.3.2-r0)
+RUN apk upgrade --no-cache zlib
 WORKDIR /app
 COPY package*.json ./
 
@@ -20,6 +22,8 @@ RUN npm run build
 
 # ---- Production (serve with nginx) ----
 FROM nginx:1.29.5-alpine3.23-slim AS production
+# Upgrade zlib to fix CVE: Out-of-bounds Write + Improper Validation (zlib < 1.3.2-r0)
+RUN apk upgrade --no-cache zlib
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 8081
