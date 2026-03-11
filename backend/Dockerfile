@@ -1,7 +1,7 @@
 # ---- Base ----
 FROM node:20-alpine AS base
-# Upgrade zlib to fix CVE: Out-of-bounds Write + Improper Validation (zlib < 1.3.2-r0)
-RUN apk upgrade --no-cache zlib
+# Pin zlib to fix CVE: Out-of-bounds Write + Improper Validation (zlib < 1.3.2-r0)
+RUN apk add --no-cache 'zlib=1.3.2-r0'
 WORKDIR /app
 COPY package*.json ./
 
@@ -20,6 +20,8 @@ RUN npm run build
 
 # ---- Production ----
 FROM node:20-alpine AS production
+# Pin zlib to fix CVE: Out-of-bounds Write + Improper Validation (zlib < 1.3.2-r0)
+RUN apk add --no-cache 'zlib=1.3.2-r0'
 WORKDIR /app
 COPY --from=build /app/package*.json ./
 RUN npm ci --only=production
