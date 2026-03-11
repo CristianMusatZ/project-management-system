@@ -1,7 +1,7 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
-dockerContext = "."
+dockerfilePath = "backend/Dockerfile"
+dockerContext = "backend"
 target = "production"
 
 [deploy]
