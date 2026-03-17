@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Users, UserCheck, UserX, UserPlus, X, AlertCircle, Trash2 } from 'lucide-react';
+import { Users, UserCheck, UserX, UserPlus, X, AlertCircle, Trash2, Mail } from 'lucide-react';
 
 interface UserItem {
   id: number;
@@ -50,6 +50,12 @@ export default function UsersPage() {
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  // Email edit state
+  const [emailTarget, setEmailTarget] = useState<UserItem | null>(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -96,6 +102,22 @@ export default function UsersPage() {
       setDeleteError(err.response?.data?.error || 'Eroare la ștergere.');
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleUpdateEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!emailTarget) return;
+    setEmailSaving(true);
+    setEmailError('');
+    try {
+      await api.patch(`/users/${emailTarget.id}/email`, { email: newEmail });
+      setEmailTarget(null);
+      fetchUsers();
+    } catch (err: any) {
+      setEmailError(err.response?.data?.error || 'Eroare la actualizarea emailului.');
+    } finally {
+      setEmailSaving(false);
     }
   }
 
@@ -195,6 +217,13 @@ export default function UsersPage() {
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => { setEmailTarget(u); setNewEmail(u.email); setEmailError(''); }}
+                          className="p-2 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition"
+                          title="Schimbare email"
+                        >
+                          <Mail className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => handleToggleActive(u.id)}
                           className={`p-2 rounded-lg transition ${u.is_active ? 'hover:bg-orange-50 text-gray-400 hover:text-orange-500' : 'hover:bg-green-50 text-gray-400 hover:text-green-500'}`}
                           title={u.is_active ? 'Dezactivare cont' : 'Activare cont'}
@@ -217,6 +246,65 @@ export default function UsersPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Change Email Modal */}
+      {emailTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in" onClick={() => setEmailTarget(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm mx-4 p-6 animate-scale-in shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Schimbare email</h2>
+                  <p className="text-xs text-gray-500">{emailTarget.first_name} {emailTarget.last_name}</p>
+                </div>
+              </div>
+              <button onClick={() => setEmailTarget(null)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {emailError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {emailError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateEmail} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Adresă email nouă</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                  placeholder="email-nou@exemplu.com"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEmailTarget(null)}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
+                >
+                  Anulare
+                </button>
+                <button
+                  type="submit"
+                  disabled={emailSaving}
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition font-medium text-sm"
+                >
+                  {emailSaving ? 'Se salvează...' : 'Salvare'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
