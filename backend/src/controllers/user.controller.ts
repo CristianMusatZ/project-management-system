@@ -149,6 +149,80 @@ export async function toggleUserActive(req: AuthRequest, res: Response): Promise
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/users/:id/email  — schimbare email utilizator (doar admin)
+// Loghează acțiunea UPDATE_EMAIL în jurnal.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function updateUserEmail(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: 'Adresa de email este obligatorie.' });
+      return;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Validare format email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      res.status(400).json({ error: 'Adresa de email nu este validă.' });
+      return;
+    }
+
+    // Verificare utilizator există
+    const userResult = await pool.query(
+      'SELECT id, email FROM users WHERE id = $1',
+      [id]
+    );
+    if (!userResult.rows.length) {
+      res.status(404).json({ error: 'Utilizator negăsit.' });
+      return;
+    }
+    const oldEmail = userResult.rows[0].email;
+
+    // Verificare email nou nu e deja folosit
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE email = $1 AND id != $2',
+      [normalizedEmail, id]
+    );
+    if (existing.rows.length > 0) {
+      res.status(409).json({ error: 'Adresa de email este deja folosită de alt cont.' });
+      return;
+    }
+
+    // Actualizare email
+    const result = await pool.query(
+      `UPDATE users
+       SET email = $1, email_verified = true, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, email, first_name, last_name, role`,
+      [normalizedEmail, id]
+    );
+
+    // Audit log
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        req.user!.id,
+        'UPDATE_EMAIL',
+        'user',
+        id,
+        JSON.stringify({ oldEmail, newEmail: normalizedEmail }),
+        req.ip,
+      ]
+    );
+
+    res.json({ message: 'Adresa de email a fost actualizată cu succes.', user: result.rows[0] });
+  } catch (error) {
+    console.error('[User] updateUserEmail error:', error);
+    res.status(500).json({ error: 'Eroare la actualizarea adresei de email.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/users/:id  — ștergere permanentă utilizator (doar admin)
 // Nu poți șterge propriul cont sau ultimul admin din sistem.
 // ─────────────────────────────────────────────────────────────────────────────

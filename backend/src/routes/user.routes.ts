@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getUsersList, createUser, getUsers, getUserById, updateUserRole, toggleUserActive, deleteUser } from '../controllers/user.controller';
+import { getUsersList, createUser, getUsers, getUserById, updateUserRole, updateUserEmail, toggleUserActive, deleteUser } from '../controllers/user.controller';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 
@@ -16,6 +16,7 @@ router.post('/', authorize('admin'), createUser);
 router.get('/', authorize('admin'), getUsers);
 router.get('/:id', authorize('admin', 'project_manager'), getUserById);
 router.patch('/:id/role', authorize('admin'), updateUserRole);
+router.patch('/:id/email', authorize('admin'), updateUserEmail);
 router.patch('/:id/toggle-active', authorize('admin'), toggleUserActive);
 router.delete('/:id', authorize('admin'), deleteUser);
 
