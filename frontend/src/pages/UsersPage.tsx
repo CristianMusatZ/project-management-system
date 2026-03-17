@@ -37,7 +37,7 @@ const roleColors: Record<string, string> = {
 };
 
 export default function UsersPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, updateUser } = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -112,6 +112,9 @@ export default function UsersPage() {
     setEmailError('');
     try {
       await api.patch(`/users/${emailTarget.id}/email`, { email: newEmail });
+      if (currentUser?.id === emailTarget.id) {
+        updateUser({ email: newEmail.toLowerCase().trim() });
+      }
       setEmailTarget(null);
       fetchUsers();
     } catch (err: any) {
