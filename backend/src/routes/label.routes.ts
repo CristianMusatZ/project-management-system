@@ -8,8 +8,8 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', getLabels);
-router.post('/', authorize('admin'), createLabel);
-router.put('/:id', authorize('admin'), updateLabel);
+router.post('/', authorize('admin', 'project_manager', 'member'), createLabel);
+router.put('/:id', authorize('admin', 'project_manager', 'member'), updateLabel);
 router.delete('/:id', authorize('admin'), deleteLabel);
 
 export default router;

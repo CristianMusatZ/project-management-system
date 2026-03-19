@@ -174,7 +174,11 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Proiecte</h1>
-          <p className="text-gray-500 mt-1">{projects.length} proiecte în total</p>
+          <p className="text-gray-500 mt-1">
+            {canManage
+              ? `${projects.length} proiecte în total`
+              : `Afișezi ${projects.length} proiect${projects.length !== 1 ? 'e' : ''} la care ești alocat`}
+          </p>
         </div>
         {canManage && (
           <button
@@ -274,6 +278,11 @@ export default function ProjectsPage() {
                   <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColors[project.status]}`}>
                     {statusLabels[project.status]}
                   </span>
+                  {!canManage && (
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600">
+                      Alocat
+                    </span>
+                  )}
                   <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${priorityColors[project.priority]}`}>
                     {priorityLabels[project.priority]}
                   </span>
