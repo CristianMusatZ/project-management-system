@@ -58,14 +58,10 @@ services:
       # JWT
       JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_change_in_production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
-      # SMTP — Email Notifications (optional, leave empty to disable)
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-noreply@exemplu.ro}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Project Management System}
+      # Brevo — Email Notifications (optional, leave empty to disable)
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_FROM: ${BREVO_FROM:-noreply@exemplu.ro}
+      BREVO_FROM_NAME: ${BREVO_FROM_NAME:-Project Management System}
     ports:
       - "4000:4000"
     volumes:
